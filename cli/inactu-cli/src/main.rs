@@ -9,7 +9,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::Signer as _;
@@ -18,6 +18,7 @@ use inactu_verifier::{
     parse_policy_document, parse_receipt_json, sha256_prefixed, verify_receipt_hash,
     verify_signatures, verify_trusted_signers, ExecutionReceipt, SignatureEntry, Signatures,
 };
+use serde_json::{json, Value};
 
 use constants::{MAX_INPUT_BYTES, MAX_JSON_BYTES, MAX_SECRET_KEY_BYTES, MAX_WASM_BYTES};
 use fileio::{read_file_limited, write_file};
@@ -39,7 +40,9 @@ fn main() -> ExitCode {
 }
 
 fn run(args: Vec<String>) -> Result<(), String> {
-    match args.first().map(String::as_str) {
+    let command = args.first().map(String::as_str).unwrap_or("unknown");
+    let started = Instant::now();
+    let result = match args.first().map(String::as_str) {
         Some("verify") => run_verify(&args[1..]),
         Some("inspect") => run_inspect(&args[1..]),
         Some("pack") => run_pack(&args[1..]),
@@ -47,7 +50,28 @@ fn run(args: Vec<String>) -> Result<(), String> {
         Some("run") => run_execute(&args[1..]),
         Some("verify-receipt") => run_verify_receipt_cmd(&args[1..]),
         _ => Err(USAGE.to_string()),
+    };
+    let duration_ms = started.elapsed().as_millis() as u64;
+    match &result {
+        Ok(()) => emit_obs(
+            "inactu.command",
+            vec![
+                ("command", json!(command)),
+                ("status", json!("ok")),
+                ("duration_ms", json!(duration_ms)),
+            ],
+        ),
+        Err(err) => emit_obs(
+            "inactu.command",
+            vec![
+                ("command", json!(command)),
+                ("status", json!("error")),
+                ("duration_ms", json!(duration_ms)),
+                ("error", json!(err)),
+            ],
+        ),
     }
+    result
 }
 
 fn run_verify(args: &[String]) -> Result<(), String> {
@@ -120,19 +144,59 @@ fn verify_bundle(
     keys_path: &Path,
     keys_digest: Option<&str>,
 ) -> Result<(), String> {
-    let bundle = load_verified_bundle(bundle_dir)?;
-    let keys_raw = read_file_limited(keys_path, MAX_JSON_BYTES, "public-keys.json")?;
-    verify_keys_digest(&keys_raw, keys_digest)?;
+    let started = Instant::now();
+    let result = (|| {
+        let preflight_started = Instant::now();
+        let bundle = load_verified_bundle(bundle_dir)?;
+        let preflight_ms = preflight_started.elapsed().as_millis() as u64;
 
-    let public_keys = parse_public_keys(&keys_raw)?;
-    verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
+        let trust_started = Instant::now();
+        let keys_raw = read_file_limited(keys_path, MAX_JSON_BYTES, "public-keys.json")?;
+        verify_keys_digest(&keys_raw, keys_digest)?;
+        let public_keys = parse_public_keys(&keys_raw)?;
+        verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
+        let trust_ms = trust_started.elapsed().as_millis() as u64;
 
-    println!(
-        "OK artifact={} signers={}",
-        bundle.manifest.artifact,
-        bundle.signatures.signatures.len()
-    );
-    Ok(())
+        println!(
+            "OK artifact={} signers={}",
+            bundle.manifest.artifact,
+            bundle.signatures.signatures.len()
+        );
+        Ok((
+            bundle.manifest.artifact,
+            bundle.signatures.signatures.len() as u64,
+            preflight_ms,
+            trust_ms,
+        ))
+    })();
+
+    match result {
+        Ok((artifact, signer_count, preflight_ms, trust_ms)) => {
+            emit_obs(
+                "inactu.verify",
+                vec![
+                    ("status", json!("ok")),
+                    ("artifact", json!(artifact)),
+                    ("signer_count", json!(signer_count)),
+                    ("preflight_ms", json!(preflight_ms)),
+                    ("trust_ms", json!(trust_ms)),
+                    ("duration_ms", json!(started.elapsed().as_millis() as u64)),
+                ],
+            );
+            Ok(())
+        }
+        Err(err) => {
+            emit_obs(
+                "inactu.verify",
+                vec![
+                    ("status", json!("error")),
+                    ("duration_ms", json!(started.elapsed().as_millis() as u64)),
+                    ("error", json!(err)),
+                ],
+            );
+            Err(err)
+        }
+    }
 }
 
 fn inspect_bundle(bundle_dir: &Path) -> Result<(), String> {
@@ -267,78 +331,179 @@ fn run_bundle(
     input_path: &Path,
     receipt_path: &Path,
 ) -> Result<(), String> {
-    let bundle = load_verified_bundle(bundle_dir)?;
-    let keys_raw = read_file_limited(keys_path, MAX_JSON_BYTES, "public-keys.json")?;
-    verify_keys_digest(&keys_raw, keys_digest)?;
-    let policy_raw = read_file_limited(policy_path, MAX_JSON_BYTES, "policy")?;
-    let input_bytes = read_file_limited(input_path, MAX_INPUT_BYTES, "input")?;
+    let started = Instant::now();
+    let result = (|| {
+        let verify_started = Instant::now();
+        let bundle = load_verified_bundle(bundle_dir)?;
+        let keys_raw = read_file_limited(keys_path, MAX_JSON_BYTES, "public-keys.json")?;
+        verify_keys_digest(&keys_raw, keys_digest)?;
+        let policy_raw = read_file_limited(policy_path, MAX_JSON_BYTES, "policy")?;
+        let input_bytes = read_file_limited(input_path, MAX_INPUT_BYTES, "input")?;
 
-    let public_keys = parse_public_keys(&keys_raw)?;
-    verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
+        let public_keys = parse_public_keys(&keys_raw)?;
+        verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
 
-    let policy = parse_policy_document(&policy_raw).map_err(|e| e.to_string())?;
-    verify_trusted_signers(&bundle.manifest, &bundle.signatures, &policy)
-        .map_err(|e| e.to_string())?;
-    enforce_capability_ceiling(&bundle.manifest.capabilities, &policy)
-        .map_err(|e| e.to_string())?;
+        let policy = parse_policy_document(&policy_raw).map_err(|e| e.to_string())?;
+        verify_trusted_signers(&bundle.manifest, &bundle.signatures, &policy)
+            .map_err(|e| e.to_string())?;
+        enforce_capability_ceiling(&bundle.manifest.capabilities, &policy)
+            .map_err(|e| e.to_string())?;
+        let verify_ms = verify_started.elapsed().as_millis() as u64;
 
-    let inputs_hash = sha256_prefixed(&input_bytes);
-    let outputs = execute_wasm(&bundle.wasm, &bundle.manifest.entrypoint)?;
-    let outputs_hash = sha256_prefixed(&outputs);
-    let mut caps_used = bundle
-        .manifest
-        .capabilities
-        .iter()
-        .map(|cap| format!("{}:{}", cap.kind, cap.value))
-        .collect::<Vec<_>>();
-    caps_used.sort();
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("system clock error: {e}"))?
-        .as_secs();
-    let receipt_hash = compute_receipt_hash(
-        &bundle.manifest.artifact,
-        &inputs_hash,
-        &outputs_hash,
-        &caps_used,
-        timestamp,
-    )
-    .map_err(|e| format!("receipt hash computation failed: {e}"))?;
-    let receipt = ExecutionReceipt {
-        artifact: bundle.manifest.artifact.clone(),
-        inputs_hash,
-        outputs_hash,
-        caps_used,
-        timestamp,
-        receipt_hash,
-    };
-    verify_receipt_hash(&receipt).map_err(|e| format!("receipt self-verification failed: {e}"))?;
+        let execute_started = Instant::now();
+        let inputs_hash = sha256_prefixed(&input_bytes);
+        let outputs = execute_wasm(&bundle.wasm, &bundle.manifest.entrypoint)?;
+        let outputs_hash = sha256_prefixed(&outputs);
+        let execute_ms = execute_started.elapsed().as_millis() as u64;
 
-    if let Some(parent) = receipt_path.parent() {
-        if !parent.as_os_str().is_empty() {
-            fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+        let receipt_started = Instant::now();
+        let mut caps_used = bundle
+            .manifest
+            .capabilities
+            .iter()
+            .map(|cap| format!("{}:{}", cap.kind, cap.value))
+            .collect::<Vec<_>>();
+        caps_used.sort();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| format!("system clock error: {e}"))?
+            .as_secs();
+        let receipt_hash = compute_receipt_hash(
+            &bundle.manifest.artifact,
+            &inputs_hash,
+            &outputs_hash,
+            &caps_used,
+            timestamp,
+        )
+        .map_err(|e| format!("receipt hash computation failed: {e}"))?;
+        let receipt = ExecutionReceipt {
+            artifact: bundle.manifest.artifact.clone(),
+            inputs_hash,
+            outputs_hash,
+            caps_used,
+            timestamp,
+            receipt_hash,
+        };
+        verify_receipt_hash(&receipt)
+            .map_err(|e| format!("receipt self-verification failed: {e}"))?;
+
+        if let Some(parent) = receipt_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
+            }
+        }
+        let receipt_json = serde_json::to_vec_pretty(&receipt)
+            .map_err(|e| format!("receipt JSON encode failed: {e}"))?;
+        write_file(receipt_path, &receipt_json)?;
+        let receipt_ms = receipt_started.elapsed().as_millis() as u64;
+
+        println!(
+            "OK run artifact={} receipt={}",
+            bundle.manifest.artifact,
+            receipt_path.display()
+        );
+        Ok((
+            bundle.manifest.artifact,
+            bundle.manifest.capabilities.len() as u64,
+            verify_ms,
+            execute_ms,
+            receipt_ms,
+        ))
+    })();
+
+    match result {
+        Ok((artifact, capability_count, verify_ms, execute_ms, receipt_ms)) => {
+            emit_obs(
+                "inactu.run",
+                vec![
+                    ("status", json!("ok")),
+                    ("artifact", json!(artifact)),
+                    ("capability_count", json!(capability_count)),
+                    ("verify_ms", json!(verify_ms)),
+                    ("execute_ms", json!(execute_ms)),
+                    ("receipt_ms", json!(receipt_ms)),
+                    ("duration_ms", json!(started.elapsed().as_millis() as u64)),
+                ],
+            );
+            Ok(())
+        }
+        Err(err) => {
+            emit_obs(
+                "inactu.run",
+                vec![
+                    ("status", json!("error")),
+                    ("duration_ms", json!(started.elapsed().as_millis() as u64)),
+                    ("error", json!(err)),
+                ],
+            );
+            Err(err)
         }
     }
-    let receipt_json = serde_json::to_vec_pretty(&receipt)
-        .map_err(|e| format!("receipt JSON encode failed: {e}"))?;
-    write_file(receipt_path, &receipt_json)?;
-
-    println!(
-        "OK run artifact={} receipt={}",
-        bundle.manifest.artifact,
-        receipt_path.display()
-    );
-    Ok(())
 }
 
 fn verify_receipt_file(receipt_path: &Path) -> Result<(), String> {
-    let receipt_raw = read_file_limited(receipt_path, MAX_JSON_BYTES, "receipt.json")?;
-    let receipt = parse_receipt_json(&receipt_raw).map_err(|e| e.to_string())?;
-    verify_receipt_hash(&receipt).map_err(|e| e.to_string())?;
-    println!(
-        "OK receipt artifact={} receipt={}",
-        receipt.artifact,
-        receipt_path.display()
-    );
-    Ok(())
+    let started = Instant::now();
+    let result = (|| {
+        let receipt_raw = read_file_limited(receipt_path, MAX_JSON_BYTES, "receipt.json")?;
+        let receipt = parse_receipt_json(&receipt_raw).map_err(|e| e.to_string())?;
+        verify_receipt_hash(&receipt).map_err(|e| e.to_string())?;
+        println!(
+            "OK receipt artifact={} receipt={}",
+            receipt.artifact,
+            receipt_path.display()
+        );
+        Ok(receipt.artifact)
+    })();
+
+    match result {
+        Ok(artifact) => {
+            emit_obs(
+                "inactu.verify_receipt",
+                vec![
+                    ("status", json!("ok")),
+                    ("artifact", json!(artifact)),
+                    ("duration_ms", json!(started.elapsed().as_millis() as u64)),
+                ],
+            );
+            Ok(())
+        }
+        Err(err) => {
+            emit_obs(
+                "inactu.verify_receipt",
+                vec![
+                    ("status", json!("error")),
+                    ("duration_ms", json!(started.elapsed().as_millis() as u64)),
+                    ("error", json!(err)),
+                ],
+            );
+            Err(err)
+        }
+    }
+}
+
+fn obs_enabled() -> bool {
+    matches!(
+        env::var("INACTU_OBS_JSON")
+            .map(|v| v.to_ascii_lowercase())
+            .as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    )
+}
+
+fn emit_obs(event: &str, fields: Vec<(&str, Value)>) {
+    if !obs_enabled() {
+        return;
+    }
+
+    let mut record = serde_json::Map::new();
+    record.insert("event".to_string(), json!(event));
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    record.insert("timestamp".to_string(), json!(timestamp));
+    for (key, value) in fields {
+        record.insert(key.to_string(), value);
+    }
+    eprintln!("{}", Value::Object(record));
 }
