@@ -1,7 +1,7 @@
 # Audit Evidence Checklist (Per Release)
 
 Use this checklist for each release window to assemble a regulator/auditor-ready
-packet. This template maps to `/Users/jove/code/inactu/docs/compliance-controls.md`.
+packet. This template maps to `docs/compliance-controls.md`.
 
 - Release identifier: `<tag/version>`
 - Release date (UTC): `<YYYY-MM-DD>`
@@ -111,4 +111,3 @@ Required for HIPAA/GDPR/CCPA/CPRA audit readiness outside this repo:
 | Policy version | `<repo path>` | `<commit/hash>` |
 | Receipt sample set | `<url/path>` | `<artifact digest>` |
 | Observability export | `<url/path>` | `<query/run id>` |
-
