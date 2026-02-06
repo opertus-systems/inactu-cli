@@ -39,7 +39,7 @@ use keys::{parse_public_keys, parse_signing_key, verify_keys_digest};
 use preflight::{load_verified_bundle, read_manifest_and_signatures};
 use runtime_exec::execute_wasm;
 
-const USAGE: &str = "usage:\n  inactu-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  inactu-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  inactu-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  inactu-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  inactu-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-experimental]\n  inactu-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli verify-receipt --receipt <receipt.json>\n  inactu-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  inactu-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  inactu-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
+const USAGE: &str = "usage:\n  inactu-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  inactu-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  inactu-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  inactu-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  inactu-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-insecure-http] [--allow-experimental]\n  inactu-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli verify-receipt --receipt <receipt.json>\n  inactu-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  inactu-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  inactu-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
 const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
 const BUNDLE_META_SCHEMA_VERSION: &str = "1.0.0";
 const RECEIPT_TIMESTAMP_STRATEGY_LOCAL: &str = "local_untrusted_unix_seconds";
@@ -188,7 +188,11 @@ fn run_install(args: &[String]) -> Result<(), String> {
     let parsed = parse_flags_with_switches(
         args,
         &["--artifact", "--keys", "--keys-digest", "--policy"],
-        &["--require-signatures", "--allow-experimental"],
+        &[
+            "--require-signatures",
+            "--allow-insecure-http",
+            "--allow-experimental",
+        ],
         USAGE,
     )?;
     let artifact = required_string(&parsed, "--artifact", USAGE)?;
@@ -198,11 +202,24 @@ fn run_install(args: &[String]) -> Result<(), String> {
         return Err("--keys and --keys-digest must be provided together".to_string());
     }
     let policy_path = optional_string(&parsed, "--policy").map(std::path::PathBuf::from);
-    let signature_mode = if has_switch(&parsed, "--require-signatures") {
+    let requested_signature_mode = if has_switch(&parsed, "--require-signatures") {
         SignatureMode::Required
     } else {
         SignatureMode::Optional
     };
+    let remote_source = is_network_artifact_source(&artifact);
+    if remote_source && keys_path.is_none() {
+        return Err(
+            "remote artifacts require --keys and --keys-digest (or use a local file source)"
+                .to_string(),
+        );
+    }
+    let signature_mode = if remote_source {
+        SignatureMode::Required
+    } else {
+        requested_signature_mode
+    };
+    let allow_insecure_http = has_switch(&parsed, "--allow-insecure-http");
     let allow_experimental = has_switch(&parsed, "--allow-experimental");
     let line = install(InstallRequest {
         artifact: &artifact,
@@ -210,10 +227,15 @@ fn run_install(args: &[String]) -> Result<(), String> {
         keys_digest: keys_digest.as_deref(),
         policy_path: policy_path.as_deref(),
         allow_experimental,
+        allow_insecure_http,
         signature_mode,
     })?;
     println!("{line}");
     Ok(())
+}
+
+fn is_network_artifact_source(source: &str) -> bool {
+    source.starts_with("http://") || source.starts_with("https://")
 }
 
 fn run_execute(args: &[String]) -> Result<(), String> {
