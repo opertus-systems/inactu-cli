@@ -12,7 +12,11 @@ use crate::constants::{MAX_JSON_BYTES, MAX_WASM_BYTES};
 use crate::fileio::read_file_limited;
 
 pub fn create_skill_archive(bundle_dir: &Path, output_path: &Path) -> Result<(), String> {
-    let manifest_raw = read_file_limited(&bundle_dir.join("manifest.json"), MAX_JSON_BYTES, "manifest.json")?;
+    let manifest_raw = read_file_limited(
+        &bundle_dir.join("manifest.json"),
+        MAX_JSON_BYTES,
+        "manifest.json",
+    )?;
     let wasm_raw = read_file_limited(&bundle_dir.join("skill.wasm"), MAX_WASM_BYTES, "skill.wasm")?;
     let manifest = parse_manifest_json(&manifest_raw).map_err(|e| e.to_string())?;
     verify_artifact_hash(&wasm_raw, &manifest.artifact).map_err(|e| e.to_string())?;
@@ -32,8 +36,12 @@ pub fn create_skill_archive(bundle_dir: &Path, output_path: &Path) -> Result<(),
     let sigstore_bundle_raw = read_optional_file(bundle_dir, "sigstore.bundle.json")?;
 
     if let Some(parent) = output_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("failed to create output directory {}: {e}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "failed to create output directory {}: {e}",
+                parent.display()
+            )
+        })?;
     }
 
     let output_file =
@@ -81,9 +89,11 @@ fn append_entry<W: std::io::Write>(
     header.set_uid(0);
     header.set_gid(0);
     header.set_mtime(0);
-    header.set_username("")
+    header
+        .set_username("")
         .map_err(|e| format!("failed to set username for {name}: {e}"))?;
-    header.set_groupname("")
+    header
+        .set_groupname("")
         .map_err(|e| format!("failed to set groupname for {name}: {e}"))?;
     header.set_cksum();
     builder

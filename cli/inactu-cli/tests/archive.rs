@@ -18,7 +18,8 @@ fn prepare_signed_bundle(root: &Path) -> std::path::PathBuf {
     let secret_key_path = root.join("signing.key");
 
     write(&wasm_path, b"\0asm\x01\0\0\0");
-    let wasm_digest = inactu_verifier::sha256_prefixed(&fs::read(&wasm_path).expect("wasm should exist"));
+    let wasm_digest =
+        inactu_verifier::sha256_prefixed(&fs::read(&wasm_path).expect("wasm should exist"));
     let manifest = format!(
         "{{\"name\":\"echo.archive\",\"version\":\"0.1.0\",\"entrypoint\":\"run\",\"artifact\":\"{wasm_digest}\",\"capabilities\":[],\"signers\":[\"alice.dev\"]}}"
     );
@@ -96,7 +97,9 @@ fn archive_is_deterministic_and_canonical() {
         let gid = header.gid().expect("gid should parse");
         let mtime = header.mtime().expect("mtime should parse");
         let mut body = Vec::new();
-        entry.read_to_end(&mut body).expect("entry body should read");
+        entry
+            .read_to_end(&mut body)
+            .expect("entry body should read");
         entries.push((path, mode, uid, gid, mtime, body));
     }
 
@@ -104,7 +107,10 @@ fn archive_is_deterministic_and_canonical() {
         .iter()
         .map(|(name, _, _, _, _, _)| name.as_str())
         .collect::<Vec<_>>();
-    assert_eq!(names, vec!["manifest.json", "skill.wasm", "signatures.json"]);
+    assert_eq!(
+        names,
+        vec!["manifest.json", "skill.wasm", "signatures.json"]
+    );
 
     for (name, mode, uid, gid, mtime, _body) in entries {
         let expected_mode = if name == "skill.wasm" { 0o755 } else { 0o644 };
