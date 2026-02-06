@@ -5,6 +5,9 @@ on:
     types:
       - published
 
+permissions:
+  contents: read
+
 jobs:
   build-and-attach:
     runs-on: ubuntu-latest

@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   keys_digest_usage:
     runs-on: ubuntu-latest
