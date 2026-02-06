@@ -34,7 +34,7 @@ use flags::{
     has_switch, optional_string, parse_flags, parse_flags_with_switches, required_path,
     required_string,
 };
-use install::{install, InstallRequest, SignatureMode};
+use install::{install, is_network_artifact_source, InstallRequest, SignatureMode};
 use keys::{parse_public_keys, parse_signing_key, verify_keys_digest};
 use preflight::{load_verified_bundle, read_manifest_and_signatures};
 use runtime_exec::execute_wasm;
@@ -232,10 +232,6 @@ fn run_install(args: &[String]) -> Result<(), String> {
     })?;
     println!("{line}");
     Ok(())
-}
-
-fn is_network_artifact_source(source: &str) -> bool {
-    source.starts_with("http://") || source.starts_with("https://")
 }
 
 fn run_execute(args: &[String]) -> Result<(), String> {

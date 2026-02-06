@@ -411,6 +411,6 @@ fn read_limited<R: Read>(
     Ok(buf)
 }
 
-fn is_network_artifact_source(source: &str) -> bool {
+pub(crate) fn is_network_artifact_source(source: &str) -> bool {
     source.starts_with("http://") || source.starts_with("https://")
 }
