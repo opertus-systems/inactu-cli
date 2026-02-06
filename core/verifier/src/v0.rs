@@ -532,7 +532,7 @@ pub fn verify_event_chain_v0(events: &[EventRecordV0]) -> Result<(), VerifyError
     Ok(())
 }
 
-fn policy_by_name<'a>(items: &'a [CapGrantV0]) -> BTreeMap<&'a str, &'a CapGrantV0> {
+fn policy_by_name(items: &[CapGrantV0]) -> BTreeMap<&str, &CapGrantV0> {
     let mut map = BTreeMap::new();
     for item in items {
         map.insert(item.name.as_str(), item);

@@ -9,13 +9,13 @@ mod runtime_exec;
 
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::process::ExitCode;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use archive::create_skill_archive;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::Signer as _;
 use inactu_verifier::{
     compute_bundle_hash, compute_manifest_hash, compute_policy_hash, compute_receipt_hash,
@@ -157,7 +157,11 @@ fn run_archive(args: &[String]) -> Result<(), String> {
     let bundle_dir = required_path(&parsed, "--bundle", USAGE)?;
     let output_path = required_path(&parsed, "--output", USAGE)?;
     create_skill_archive(&bundle_dir, &output_path)?;
-    println!("OK archive bundle={} output={}", bundle_dir.display(), output_path.display());
+    println!(
+        "OK archive bundle={} output={}",
+        bundle_dir.display(),
+        output_path.display()
+    );
     Ok(())
 }
 
@@ -239,18 +243,18 @@ fn run_execute(args: &[String]) -> Result<(), String> {
     let receipt_format =
         parse_receipt_format(optional_string(&parsed, "--receipt-format").as_deref())?;
     let allow_experimental = has_switch(&parsed, "--allow-experimental");
-    run_bundle(
-        &bundle_dir,
-        &keys_path,
-        &keys_digest,
+    run_bundle(RunBundleArgs {
+        bundle_dir,
+        keys_path,
+        keys_digest,
         require_cosign,
-        oci_ref.as_deref(),
-        &policy_path,
-        &input_path,
-        &receipt_path,
+        oci_ref,
+        policy_path,
+        input_path,
+        receipt_path,
         receipt_format,
         allow_experimental,
-    )
+    })
 }
 
 fn run_verify_receipt_cmd(args: &[String]) -> Result<(), String> {
@@ -525,18 +529,32 @@ fn sign_bundle(
     Ok(())
 }
 
-fn run_bundle(
-    bundle_dir: &Path,
-    keys_path: &Path,
-    keys_digest: &str,
+struct RunBundleArgs {
+    bundle_dir: PathBuf,
+    keys_path: PathBuf,
+    keys_digest: String,
     require_cosign: bool,
-    oci_ref: Option<&str>,
-    policy_path: &Path,
-    input_path: &Path,
-    receipt_path: &Path,
+    oci_ref: Option<String>,
+    policy_path: PathBuf,
+    input_path: PathBuf,
+    receipt_path: PathBuf,
     receipt_format: ReceiptFormat,
     allow_experimental: bool,
-) -> Result<(), String> {
+}
+
+fn run_bundle(args: RunBundleArgs) -> Result<(), String> {
+    let RunBundleArgs {
+        bundle_dir,
+        keys_path,
+        keys_digest,
+        require_cosign,
+        oci_ref,
+        policy_path,
+        input_path,
+        receipt_path,
+        receipt_format,
+        allow_experimental,
+    } = args;
     let started = Instant::now();
     let result = (|| {
         if matches!(receipt_format, ReceiptFormat::V1Draft) && !allow_experimental {
@@ -549,17 +567,17 @@ fn run_bundle(
             .as_secs();
 
         let verify_started = Instant::now();
-        let bundle = load_verified_bundle(bundle_dir)?;
+        let bundle = load_verified_bundle(&bundle_dir)?;
         require_manifest_schema_allowed(&bundle.manifest, allow_experimental)?;
-        let keys_raw = read_file_limited(keys_path, MAX_JSON_BYTES, "public-keys.json")?;
-        verify_keys_digest(&keys_raw, keys_digest)?;
-        let policy_raw = read_file_limited(policy_path, MAX_JSON_BYTES, "policy")?;
-        let input_bytes = read_file_limited(input_path, MAX_INPUT_BYTES, "input")?;
+        let keys_raw = read_file_limited(&keys_path, MAX_JSON_BYTES, "public-keys.json")?;
+        verify_keys_digest(&keys_raw, &keys_digest)?;
+        let policy_raw = read_file_limited(&policy_path, MAX_JSON_BYTES, "policy")?;
+        let input_bytes = read_file_limited(&input_path, MAX_INPUT_BYTES, "input")?;
 
         let public_keys = parse_public_keys(&keys_raw)?;
         verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
         if require_cosign || oci_ref.is_some() {
-            let Some(ref_value) = oci_ref else {
+            let Some(ref_value) = oci_ref.as_deref() else {
                 return Err("--oci-ref is required when --require-cosign is set".to_string());
             };
             verify_cosign_oci_ref(ref_value)?;
@@ -682,7 +700,7 @@ fn run_bundle(
                 fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
             }
         }
-        write_file(receipt_path, &receipt_json)?;
+        write_file(&receipt_path, &receipt_json)?;
         let receipt_ms = receipt_started.elapsed().as_millis() as u64;
 
         println!(
