@@ -50,11 +50,7 @@ fn make_skill_archive_missing_manifest(bundle_dir: &Path, out_path: &Path) {
 
 fn prepare_signed_bundle(
     root: &Path,
-) -> (
-    std::path::PathBuf,
-    std::path::PathBuf,
-    std::path::PathBuf,
-) {
+) -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
     let wasm_path = root.join("skill.wasm");
     let manifest_path = root.join("manifest.json");
     let bundle_dir = root.join("bundle");
@@ -107,14 +103,19 @@ fn run_install(
     artifact: &str,
     keys_path: &Path,
     require_signatures: bool,
+    allow_insecure_http: bool,
 ) -> std::process::Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_inactu-cli"));
     cmd.args(["install", "--artifact"]).arg(artifact);
     cmd.args(["--keys"]).arg(keys_path);
-    cmd.args(["--keys-digest"])
-        .arg(sha256_prefixed(&fs::read(keys_path).expect("keys should exist")));
+    cmd.args(["--keys-digest"]).arg(sha256_prefixed(
+        &fs::read(keys_path).expect("keys should exist"),
+    ));
     if require_signatures {
         cmd.args(["--require-signatures"]);
+    }
+    if allow_insecure_http {
+        cmd.args(["--allow-insecure-http"]);
     }
     cmd.env("INACTU_HOME", inactu_home);
     cmd.output().expect("install should run")
@@ -134,6 +135,7 @@ fn install_persists_store_and_index() {
         archive_path.to_str().expect("archive path should be utf8"),
         &keys_path,
         true,
+        false,
     );
     assert!(output.status.success(), "{:?}", output);
 
@@ -158,7 +160,9 @@ fn install_persists_store_and_index() {
     let index_raw = fs::read(inactu_home.join("index.json")).expect("index should exist");
     let index: Value = serde_json::from_slice(&index_raw).expect("index should be valid JSON");
     assert_eq!(index["schema_version"], "1.0.0");
-    let entries = index["entries"].as_array().expect("entries should be array");
+    let entries = index["entries"]
+        .as_array()
+        .expect("entries should be array");
     let entry = entries
         .iter()
         .find(|entry| entry["skill"] == digest)
@@ -185,7 +189,7 @@ fn install_accepts_file_url_source() {
     )
     .expect("file URL should be created");
 
-    let output = run_install(&inactu_home, file_url.as_str(), &keys_path, true);
+    let output = run_install(&inactu_home, file_url.as_str(), &keys_path, true, false);
     assert!(output.status.success(), "{:?}", output);
 }
 
@@ -219,9 +223,46 @@ fn install_accepts_http_source() {
     thread::sleep(Duration::from_millis(50));
 
     let url = format!("http://127.0.0.1:{port}/skill.tar.zst");
-    let output = run_install(&inactu_home, &url, &keys_path, true);
+    let output = run_install(&inactu_home, &url, &keys_path, true, true);
     assert!(output.status.success(), "{:?}", output);
     server.join().expect("server thread should join");
+}
+
+#[test]
+fn install_rejects_http_without_allow_insecure_http() {
+    let root = temp_dir("install_http_disallowed");
+    let inactu_home = root.join("inactu-home");
+    let (_bundle_dir, keys_path, _secret_key_path) = prepare_signed_bundle(&root);
+    let output = run_install(
+        &inactu_home,
+        "http://127.0.0.1:9/skill.tar.zst",
+        &keys_path,
+        true,
+        false,
+    );
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf8");
+    assert!(
+        stderr.contains("http:// artifacts are disabled by default"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn install_rejects_remote_source_without_keys() {
+    let root = temp_dir("install_https_requires_keys");
+    let inactu_home = root.join("inactu-home");
+    let output = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["install", "--artifact", "https://example.com/skill.tar.zst"])
+        .env("INACTU_HOME", &inactu_home)
+        .output()
+        .expect("install should run");
+    assert!(!output.status.success(), "{:?}", output);
+    let stderr = String::from_utf8(output.stderr).expect("stderr should be utf8");
+    assert!(
+        stderr.contains("remote artifacts require --keys and --keys-digest"),
+        "{stderr}"
+    );
 }
 
 #[test]
@@ -237,6 +278,7 @@ fn install_rejects_missing_manifest_in_archive() {
         archive_path.to_str().expect("archive path should be utf8"),
         &keys_path,
         true,
+        false,
     );
     assert!(!output.status.success(), "{:?}", output);
     let stderr = String::from_utf8(output.stderr).expect("stderr should be utf8");
@@ -251,7 +293,11 @@ fn install_rejects_oci_refs_in_v0() {
     let root = temp_dir("install_oci_ref");
     let inactu_home = root.join("inactu-home");
     let output = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
-        .args(["install", "--artifact", "oci://example.com/skill@sha256:abc"])
+        .args([
+            "install",
+            "--artifact",
+            "oci://example.com/skill@sha256:abc",
+        ])
         .env("INACTU_HOME", &inactu_home)
         .output()
         .expect("install should run");
