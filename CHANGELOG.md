@@ -8,8 +8,10 @@ Versioning.
 ## [Unreleased]
 
 ### Added
-- Optional trust-anchor pinning for `public-keys.json` via `--keys-digest` on
+- Trust-anchor pinning for `public-keys.json` via `--keys-digest` on
   `verify` and `run`.
+- Key management runbook for trust-anchor rotation/revocation:
+  `docs/key-management.md`.
 - Runtime execution limits (fuel and Wasmtime store limits for memory/tables/
   instances).
 - Defensive bounded file reads for untrusted CLI inputs.
@@ -32,6 +34,10 @@ Versioning.
 - `verify-receipt` support for v1 draft receipt hash verification.
 
 ### Changed
+- `verify` and `run` now require `--keys-digest` (digest pinning is no longer
+  optional).
+- Security CI now enforces `--keys-digest` usage in documented/scripted
+  `verify`/`run` examples.
 - Signature payloads now bind to canonical `manifest_hash`.
 - Net capability evaluation now uses structured URI matching.
 - Trusted signer validation now requires signer intersection and declared

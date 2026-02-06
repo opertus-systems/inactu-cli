@@ -9,6 +9,9 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 use url::Url;
 
+pub mod v0;
+pub use v0::*;
+
 pub const MANIFEST_V0_SCHEMA_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../spec/skill-format/manifest.schema.json"
@@ -94,6 +97,14 @@ pub enum VerifyError {
     CapabilityDenied(String),
     #[error("policy constraint violation: {0}")]
     PolicyConstraint(String),
+    #[error("invalid v0 skill manifest: {reason}")]
+    InvalidV0SkillManifest { reason: String },
+    #[error("invalid v0 pipeline: {reason}")]
+    InvalidV0Pipeline { reason: String },
+    #[error("missing required capability after policy intersection: {0}")]
+    MissingRequiredCapabilityV0(String),
+    #[error("v0 event chain violation: {reason}")]
+    EventChainViolationV0 { reason: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -726,9 +737,7 @@ pub fn compute_bundle_hash(
     Ok(sha256_prefixed(&bytes))
 }
 
-pub fn compute_runtime_version_digest_v1(
-    runtime: &RuntimeV1Draft,
-) -> Result<String, VerifyError> {
+pub fn compute_runtime_version_digest_v1(runtime: &RuntimeV1Draft) -> Result<String, VerifyError> {
     let bytes = to_jcs_bytes(runtime)?;
     Ok(sha256_prefixed(&bytes))
 }
@@ -1443,17 +1452,13 @@ mod tests {
         };
         let caps_used = vec!["env:HOME".to_string()];
         let outputs_hash =
-            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-                .to_string();
+            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string();
         let runtime_version_digest = compute_runtime_version_digest_v1(&runtime).unwrap();
         let result_digest = compute_result_digest_v1(&result, &outputs_hash, &caps_used).unwrap();
         let policy_hash = compute_policy_hash(&policy).unwrap();
-        let bundle_hash = compute_bundle_hash(
-            &signatures.artifact,
-            &signatures.manifest_hash,
-            &signatures,
-        )
-        .unwrap();
+        let bundle_hash =
+            compute_bundle_hash(&signatures.artifact, &signatures.manifest_hash, &signatures)
+                .unwrap();
 
         let mut receipt = ExecutionReceiptV1Draft {
             schema_version: "1.0.0-draft".to_string(),
@@ -1461,9 +1466,8 @@ mod tests {
             manifest_hash: signatures.manifest_hash.clone(),
             policy_hash,
             bundle_hash,
-            inputs_hash:
-                "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-                    .to_string(),
+            inputs_hash: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                .to_string(),
             outputs_hash: outputs_hash.clone(),
             runtime_version_digest,
             result_digest,

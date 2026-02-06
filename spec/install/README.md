@@ -7,11 +7,11 @@ behavior and test coverage.
 
 Install metadata is written by `inactu-cli` install flow in:
 
-- `cli/inactu-cli/src/install.rs`
+- `/Users/jove/code/inactu/cli/inactu-cli/src/install.rs`
 
 Canonical archive bytes are written by:
 
-- `cli/inactu-cli/src/archive.rs`
+- `/Users/jove/code/inactu/cli/inactu-cli/src/archive.rs`
 
 Primary write points:
 
@@ -21,7 +21,7 @@ Primary write points:
 ## `meta.schema.json` Field Mapping
 
 Schema source:
-- `spec/install/meta.schema.json`
+- `/Users/jove/code/inactu/spec/install/meta.schema.json`
 
 Field mapping:
 
@@ -41,7 +41,7 @@ Field mapping:
 ## `index.schema.json` Field Mapping
 
 Schema source:
-- `spec/install/index.schema.json`
+- `/Users/jove/code/inactu/spec/install/index.schema.json`
 
 Top-level mapping:
 
@@ -77,7 +77,7 @@ Per-entry mapping:
 
 Install behavior and schema-shape assertions are covered by:
 
-- `cli/inactu-cli/tests/install.rs`
+- `/Users/jove/code/inactu/cli/inactu-cli/tests/install.rs`
 
 Key tests:
 

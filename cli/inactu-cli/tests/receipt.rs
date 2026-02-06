@@ -75,6 +75,10 @@ fn make_receipt() -> PathBuf {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -152,6 +156,10 @@ fn make_receipt_v1_draft() -> PathBuf {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])

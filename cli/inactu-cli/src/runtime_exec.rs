@@ -1,6 +1,5 @@
 use anyhow::anyhow;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use serde_json::json;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::fs::{self, OpenOptions};
@@ -250,58 +249,6 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
 
     linker.func_wrap(
         "inactu",
-        "fs_read_tree",
-        |mut caller: Caller<'_, HostState>,
-         root_ptr: i32,
-         root_len: i32,
-         out_ptr: i32,
-         out_len: i32|
-         -> anyhow::Result<i32> {
-            if root_ptr < 0 || root_len < 0 || out_ptr < 0 || out_len < 0 {
-                return Ok(-1);
-            }
-            let Some(root) =
-                read_utf8_from_memory(&mut caller, root_ptr as usize, root_len as usize)
-            else {
-                return Ok(-1);
-            };
-            let Some(root_norm) = normalize_abs_path(&root) else {
-                return Ok(-1);
-            };
-            require_capability(
-                &mut caller,
-                "fs.read",
-                |value| {
-                    normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&root_norm, &p))
-                        .unwrap_or(false)
-                },
-                "fs.read",
-            )?;
-
-            let mut entries = Vec::new();
-            collect_tree_entries(Path::new(&root_norm), Path::new(&root_norm), &mut entries)?;
-            entries.sort_by(|a, b| {
-                let ap = a["path"].as_str().unwrap_or_default();
-                let bp = b["path"].as_str().unwrap_or_default();
-                ap.cmp(bp)
-            });
-            let body = json!({
-                "root": root_norm,
-                "entries": entries,
-                "truncated": false
-            });
-            let encoded =
-                serde_json::to_vec(&body).map_err(|e| anyhow!("json encode failed: {e}"))?;
-            if encoded.len() > out_len as usize {
-                return Ok(-1);
-            }
-            Ok(write_to_memory(&mut caller, out_ptr as usize, &encoded).unwrap_or(-1))
-        },
-    )?;
-
-    linker.func_wrap(
-        "inactu",
         "fs_write_file",
         |mut caller: Caller<'_, HostState>,
          path_ptr: i32,
@@ -382,7 +329,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             };
             let mut body = Vec::new();
             let max = out_len as usize;
-            let mut reader = response.into_body().into_reader().take(max as u64);
+            let mut reader = response.into_reader().take(max as u64);
             if reader.read_to_end(&mut body).is_err() {
                 return Ok(-1);
             }
@@ -712,44 +659,4 @@ fn queue_file_path(topic: &[u8]) -> PathBuf {
     let digest = sha256_prefixed(topic);
     let suffix = digest.strip_prefix("sha256:").unwrap_or(&digest);
     queue_root().join(format!("{suffix}.log"))
-}
-
-fn collect_tree_entries(
-    root: &Path,
-    current: &Path,
-    out: &mut Vec<serde_json::Value>,
-) -> anyhow::Result<()> {
-    let mut children = fs::read_dir(current)
-        .map_err(|e| anyhow!("read_dir failed for {}: {e}", current.display()))?
-        .filter_map(Result::ok)
-        .collect::<Vec<_>>();
-    children.sort_by_key(|a| a.file_name());
-
-    for child in children {
-        let path = child.path();
-        let meta = fs::symlink_metadata(&path)
-            .map_err(|e| anyhow!("metadata failed for {}: {e}", path.display()))?;
-        if meta.file_type().is_symlink() {
-            continue;
-        }
-        let rel = match path.strip_prefix(root) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-        let rel_str = rel.to_string_lossy().replace('\\', "/");
-        if meta.is_dir() {
-            out.push(json!({
-                "path": rel_str,
-                "kind": "dir"
-            }));
-            collect_tree_entries(root, &path, out)?;
-        } else if meta.is_file() {
-            out.push(json!({
-                "path": rel_str,
-                "kind": "file",
-                "bytes": meta.len()
-            }));
-        }
-    }
-    Ok(())
 }

@@ -31,7 +31,6 @@ pub struct InstallRequest<'a> {
     pub keys_digest: Option<&'a str>,
     pub policy_path: Option<&'a Path>,
     pub allow_experimental: bool,
-    pub allow_insecure_http: bool,
     pub signature_mode: SignatureMode,
 }
 
@@ -61,16 +60,7 @@ struct Package {
 }
 
 pub fn install(request: InstallRequest<'_>) -> Result<String, String> {
-    if is_network_artifact_source(request.artifact)
-        && matches!(request.signature_mode, SignatureMode::Optional)
-    {
-        return Err(
-            "remote artifacts require --require-signatures with --keys and --keys-digest"
-                .to_string(),
-        );
-    }
-
-    let archive_raw = load_artifact(request.artifact, request.allow_insecure_http)?;
+    let archive_raw = load_artifact(request.artifact)?;
     let archive_digest = sha256_prefixed(&archive_raw);
     let package = unpack_archive(&archive_raw)?;
 
@@ -124,31 +114,18 @@ pub fn install(request: InstallRequest<'_>) -> Result<String, String> {
     ))
 }
 
-fn load_artifact(source: &str, allow_insecure_http: bool) -> Result<Vec<u8>, String> {
+fn load_artifact(source: &str) -> Result<Vec<u8>, String> {
     if source.starts_with("oci://") {
         return Err(
             "OCI refs are not supported in v0 install yet; use file path, file://, or http(s) URL"
                 .to_string(),
         );
     }
-    if source.starts_with("http://") {
-        if !allow_insecure_http {
-            return Err(
-                "http:// artifacts are disabled by default; pass --allow-insecure-http only for local development"
-                    .to_string(),
-            );
-        }
+    if source.starts_with("http://") || source.starts_with("https://") {
         let response = ureq::get(source)
             .call()
             .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
-        let mut reader = response.into_body().into_reader();
-        return read_limited(&mut reader, MAX_SKILL_ARCHIVE_BYTES, "artifact");
-    }
-    if source.starts_with("https://") {
-        let response = ureq::get(source)
-            .call()
-            .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
-        let mut reader = response.into_body().into_reader();
+        let mut reader = response.into_reader();
         return read_limited(&mut reader, MAX_SKILL_ARCHIVE_BYTES, "artifact");
     }
     if source.starts_with("file://") {
@@ -233,8 +210,7 @@ fn require_manifest_schema_allowed(
     manifest: &inactu_verifier::Manifest,
     allow_experimental: bool,
 ) -> Result<(), String> {
-    if manifest.schema_version.as_deref() == Some(EXPERIMENTAL_SCHEMA_VERSION)
-        && !allow_experimental
+    if manifest.schema_version.as_deref() == Some(EXPERIMENTAL_SCHEMA_VERSION) && !allow_experimental
     {
         return Err(format!(
             "manifest schema_version '{EXPERIMENTAL_SCHEMA_VERSION}' requires --allow-experimental"
@@ -274,9 +250,7 @@ fn validate_signatures(
         let public_keys = parse_public_keys(&keys_raw)?;
         verify_signatures(&signatures, &public_keys).map_err(|e| e.to_string())?;
     } else if matches!(signature_mode, SignatureMode::Required) {
-        return Err(
-            "--keys and --keys-digest are required when --require-signatures is set".to_string(),
-        );
+        return Err("--keys and --keys-digest are required when --require-signatures is set".to_string());
     }
     Ok(())
 }
@@ -341,17 +315,12 @@ fn update_index(
     manifest_name: &str,
     manifest_version: &str,
 ) -> Result<(), String> {
-    fs::create_dir_all(inactu_home).map_err(|e| {
-        format!(
-            "failed to create inactu home {}: {e}",
-            inactu_home.display()
-        )
-    })?;
+    fs::create_dir_all(inactu_home)
+        .map_err(|e| format!("failed to create inactu home {}: {e}", inactu_home.display()))?;
     let index_path = inactu_home.join("index.json");
     let mut index = if index_path.exists() {
         let raw = read_file_limited(&index_path, MAX_JSON_BYTES, "index.json")?;
-        serde_json::from_slice::<Index>(&raw)
-            .map_err(|e| format!("index.json parse failed: {e}"))?
+        serde_json::from_slice::<Index>(&raw).map_err(|e| format!("index.json parse failed: {e}"))?
     } else {
         Index {
             schema_version: "1.0.0".to_string(),
@@ -391,11 +360,7 @@ fn unix_now_secs() -> Result<u64, String> {
         .map_err(|e| format!("system clock error: {e}"))
 }
 
-fn read_limited<R: Read>(
-    reader: &mut R,
-    max_bytes: u64,
-    logical_name: &str,
-) -> Result<Vec<u8>, String> {
+fn read_limited<R: Read>(reader: &mut R, max_bytes: u64, logical_name: &str) -> Result<Vec<u8>, String> {
     let mut buf = Vec::new();
     reader
         .take(max_bytes.saturating_add(1))
@@ -409,8 +374,4 @@ fn read_limited<R: Read>(
         ));
     }
     Ok(buf)
-}
-
-pub(crate) fn is_network_artifact_source(source: &str) -> bool {
-    source.starts_with("http://") || source.starts_with("https://")
 }

@@ -8,9 +8,6 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-
 jobs:
   release-skill:
     runs-on: ubuntu-latest
@@ -23,13 +20,13 @@ jobs:
       COSIGN_YES: "true"
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        uses: Swatinem/rust-cache@v2
 
       - name: Run conformance
         run: cargo conformance
@@ -45,16 +42,16 @@ jobs:
           cp test-vectors/good/pack-sign-roundtrip/signatures.json dist/signatures.json
 
       - name: Install ORAS
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6
+        uses: oras-project/setup-oras@v1
 
       - name: Install Syft
-        uses: anchore/sbom-action/download-syft@28d71544de8eaf1b958d335707167c5f783590ad
+        uses: anchore/sbom-action/download-syft@v0
 
       - name: Install Trivy
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514
+        uses: aquasecurity/setup-trivy@v0.2.4
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad
+        uses: sigstore/cosign-installer@v3.8.2
 
       - name: Generate SPDX SBOM
         run: syft dir:./dist -o spdx-json > dist/sbom.spdx.json

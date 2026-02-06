@@ -81,6 +81,10 @@ fn run_emits_valid_receipt_after_verification_and_policy_check() {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -165,6 +169,10 @@ capability_ceiling:
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -246,6 +254,10 @@ fn run_stops_infinite_loop_on_fuel_exhaustion() {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -326,6 +338,10 @@ fn run_stops_memory_growth_abuse() {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -409,6 +425,10 @@ fn run_emits_v1_draft_receipt_with_security_digests() {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -494,6 +514,10 @@ fn run_rejects_v1_draft_receipt_without_allow_experimental() {
         .arg(&bundle_dir)
         .args(["--keys"])
         .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
         .args(["--policy"])
         .arg(&policy_path)
         .args(["--input"])
@@ -599,4 +623,83 @@ fn run_rejects_keys_digest_mismatch() {
         !receipt_path.exists(),
         "receipt should not exist on digest mismatch"
     );
+}
+
+#[test]
+fn run_requires_keys_digest_flag() {
+    let root = temp_dir("run_keys_digest_required");
+    let wasm_path = root.join("input.wasm");
+    let manifest_path = root.join("input.manifest.json");
+    let bundle_dir = root.join("bundle");
+    let secret_key_path = root.join("signing.key");
+    let keys_path = root.join("public-keys.json");
+    let policy_path = root.join("policy.json");
+    let input_path = root.join("input.json");
+    let receipt_path = root.join("receipt.json");
+
+    let wasm = wasm_with_i32_entrypoint("run", 5);
+    write(&wasm_path, &wasm);
+    let artifact = sha256_prefixed(&wasm);
+    let manifest = format!(
+        "{{\"name\":\"digest.required\",\"version\":\"0.1.0\",\"entrypoint\":\"run\",\"artifact\":\"{artifact}\",\"capabilities\":[],\"signers\":[\"alice.dev\"]}}"
+    );
+    write(&manifest_path, manifest.as_bytes());
+
+    let pack = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["pack", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--wasm"])
+        .arg(&wasm_path)
+        .args(["--manifest"])
+        .arg(&manifest_path)
+        .output()
+        .expect("pack should run");
+    assert!(pack.status.success(), "{:?}", pack);
+
+    let signing_key = SigningKey::from_bytes(&[27u8; 32]);
+    write(
+        &secret_key_path,
+        STANDARD.encode(signing_key.to_bytes()).as_bytes(),
+    );
+    let sign = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["sign", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--signer", "alice.dev", "--secret-key"])
+        .arg(&secret_key_path)
+        .output()
+        .expect("sign should run");
+    assert!(sign.status.success(), "{:?}", sign);
+
+    let keys = format!(
+        "{{\"alice.dev\":\"{}\"}}",
+        STANDARD.encode(signing_key.verifying_key().to_bytes())
+    );
+    write(&keys_path, keys.as_bytes());
+    let policy = r#"{
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {
+        "exec": false,
+        "time": false
+      }
+    }"#;
+    write(&policy_path, policy.as_bytes());
+    write(&input_path, br#"{}"#);
+
+    let run = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["run", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--keys"])
+        .arg(&keys_path)
+        .args(["--policy"])
+        .arg(&policy_path)
+        .args(["--input"])
+        .arg(&input_path)
+        .args(["--receipt"])
+        .arg(&receipt_path)
+        .output()
+        .expect("run should run");
+    assert!(!run.status.success(), "{:?}", run);
+    let stderr = String::from_utf8(run.stderr).expect("stderr should be utf8");
+    assert!(stderr.contains("usage:"), "stderr was: {stderr}");
 }

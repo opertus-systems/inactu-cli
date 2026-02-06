@@ -1,6 +1,8 @@
+mod archive;
 mod constants;
 mod fileio;
 mod flags;
+mod install;
 mod keys;
 mod preflight;
 mod runtime_exec;
@@ -13,6 +15,7 @@ use std::process::ExitCode;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
+use archive::create_skill_archive;
 use ed25519_dalek::Signer as _;
 use inactu_verifier::{
     compute_bundle_hash, compute_manifest_hash, compute_policy_hash, compute_receipt_hash,
@@ -31,11 +34,12 @@ use flags::{
     has_switch, optional_string, parse_flags, parse_flags_with_switches, required_path,
     required_string,
 };
+use install::{install, InstallRequest, SignatureMode};
 use keys::{parse_public_keys, parse_signing_key, verify_keys_digest};
 use preflight::{load_verified_bundle, read_manifest_and_signatures};
 use runtime_exec::execute_wasm;
 
-const USAGE: &str = "usage:\n  inactu-cli verify --bundle <bundle-dir> --keys <public-keys.json> [--keys-digest <sha256:...>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  inactu-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  inactu-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  inactu-cli run --bundle <bundle-dir> --keys <public-keys.json> [--keys-digest <sha256:...>] --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli verify-receipt --receipt <receipt.json>\n  inactu-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  inactu-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  inactu-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
+const USAGE: &str = "usage:\n  inactu-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  inactu-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  inactu-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  inactu-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  inactu-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-experimental]\n  inactu-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli verify-receipt --receipt <receipt.json>\n  inactu-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  inactu-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  inactu-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
 const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
 const BUNDLE_META_SCHEMA_VERSION: &str = "1.0.0";
 const RECEIPT_TIMESTAMP_STRATEGY_LOCAL: &str = "local_untrusted_unix_seconds";
@@ -71,7 +75,9 @@ fn run(args: Vec<String>) -> Result<(), String> {
         Some("verify") => run_verify(&args[1..]),
         Some("inspect") => run_inspect(&args[1..]),
         Some("pack") => run_pack(&args[1..]),
+        Some("archive") => run_archive(&args[1..]),
         Some("sign") => run_sign(&args[1..]),
+        Some("install") => run_install(&args[1..]),
         Some("run") => run_execute(&args[1..]),
         Some("verify-receipt") => run_verify_receipt_cmd(&args[1..]),
         Some("verify-registry-entry") => run_verify_registry_entry_cmd(&args[1..]),
@@ -111,14 +117,14 @@ fn run_verify(args: &[String]) -> Result<(), String> {
     )?;
     let bundle_dir = required_path(&parsed, "--bundle", USAGE)?;
     let keys_path = required_path(&parsed, "--keys", USAGE)?;
-    let keys_digest = optional_string(&parsed, "--keys-digest");
+    let keys_digest = required_string(&parsed, "--keys-digest", USAGE)?;
     let oci_ref = optional_string(&parsed, "--oci-ref");
     let require_cosign = has_switch(&parsed, "--require-cosign");
     let allow_experimental = has_switch(&parsed, "--allow-experimental");
     verify_bundle(
         &bundle_dir,
         &keys_path,
-        keys_digest.as_deref(),
+        &keys_digest,
         require_cosign,
         oci_ref.as_deref(),
         allow_experimental,
@@ -146,6 +152,15 @@ fn run_pack(args: &[String]) -> Result<(), String> {
     pack_bundle(&bundle_dir, &wasm_path, &manifest_path, allow_experimental)
 }
 
+fn run_archive(args: &[String]) -> Result<(), String> {
+    let parsed = parse_flags(args, &["--bundle", "--output"], USAGE)?;
+    let bundle_dir = required_path(&parsed, "--bundle", USAGE)?;
+    let output_path = required_path(&parsed, "--output", USAGE)?;
+    create_skill_archive(&bundle_dir, &output_path)?;
+    println!("OK archive bundle={} output={}", bundle_dir.display(), output_path.display());
+    Ok(())
+}
+
 fn run_sign(args: &[String]) -> Result<(), String> {
     let parsed = parse_flags_with_switches(
         args,
@@ -163,6 +178,38 @@ fn run_sign(args: &[String]) -> Result<(), String> {
         &secret_key_path,
         allow_experimental,
     )
+}
+
+fn run_install(args: &[String]) -> Result<(), String> {
+    let parsed = parse_flags_with_switches(
+        args,
+        &["--artifact", "--keys", "--keys-digest", "--policy"],
+        &["--require-signatures", "--allow-experimental"],
+        USAGE,
+    )?;
+    let artifact = required_string(&parsed, "--artifact", USAGE)?;
+    let keys_path = optional_string(&parsed, "--keys").map(std::path::PathBuf::from);
+    let keys_digest = optional_string(&parsed, "--keys-digest");
+    if keys_path.is_some() ^ keys_digest.is_some() {
+        return Err("--keys and --keys-digest must be provided together".to_string());
+    }
+    let policy_path = optional_string(&parsed, "--policy").map(std::path::PathBuf::from);
+    let signature_mode = if has_switch(&parsed, "--require-signatures") {
+        SignatureMode::Required
+    } else {
+        SignatureMode::Optional
+    };
+    let allow_experimental = has_switch(&parsed, "--allow-experimental");
+    let line = install(InstallRequest {
+        artifact: &artifact,
+        keys_path: keys_path.as_deref(),
+        keys_digest: keys_digest.as_deref(),
+        policy_path: policy_path.as_deref(),
+        allow_experimental,
+        signature_mode,
+    })?;
+    println!("{line}");
+    Ok(())
 }
 
 fn run_execute(args: &[String]) -> Result<(), String> {
@@ -183,18 +230,19 @@ fn run_execute(args: &[String]) -> Result<(), String> {
     )?;
     let bundle_dir = required_path(&parsed, "--bundle", USAGE)?;
     let keys_path = required_path(&parsed, "--keys", USAGE)?;
-    let keys_digest = optional_string(&parsed, "--keys-digest");
+    let keys_digest = required_string(&parsed, "--keys-digest", USAGE)?;
     let oci_ref = optional_string(&parsed, "--oci-ref");
     let require_cosign = has_switch(&parsed, "--require-cosign");
     let policy_path = required_path(&parsed, "--policy", USAGE)?;
     let input_path = required_path(&parsed, "--input", USAGE)?;
     let receipt_path = required_path(&parsed, "--receipt", USAGE)?;
-    let receipt_format = parse_receipt_format(optional_string(&parsed, "--receipt-format").as_deref())?;
+    let receipt_format =
+        parse_receipt_format(optional_string(&parsed, "--receipt-format").as_deref())?;
     let allow_experimental = has_switch(&parsed, "--allow-experimental");
     run_bundle(
         &bundle_dir,
         &keys_path,
-        keys_digest.as_deref(),
+        &keys_digest,
         require_cosign,
         oci_ref.as_deref(),
         &policy_path,
@@ -234,7 +282,7 @@ fn run_validate_receipt_v1_cmd(args: &[String]) -> Result<(), String> {
 fn verify_bundle(
     bundle_dir: &Path,
     keys_path: &Path,
-    keys_digest: Option<&str>,
+    keys_digest: &str,
     require_cosign: bool,
     oci_ref: Option<&str>,
     allow_experimental: bool,
@@ -480,7 +528,7 @@ fn sign_bundle(
 fn run_bundle(
     bundle_dir: &Path,
     keys_path: &Path,
-    keys_digest: Option<&str>,
+    keys_digest: &str,
     require_cosign: bool,
     oci_ref: Option<&str>,
     policy_path: &Path,

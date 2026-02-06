@@ -28,12 +28,12 @@ For each control below, maintain auditable evidence in immutable storage:
 
 | Control ID | Control | Inactu implementation | Evidence in repo/runtime |
 |---|---|---|---|
-| `IC-01` | Artifact integrity and signature verification before execution | `pack/sign/verify/run` flow validates digests and signatures; optional `--require-cosign --oci-ref` gate | `cli/inactu-cli/src/main.rs`, `cli/inactu-cli/tests/pack_sign.rs`, `.github/workflows/release-skill.yml` |
-| `IC-02` | Least-privilege execution (capability ceilings + trusted signers) | Policy parsing and enforcement before execution | `spec/policy/policy.md`, `cli/inactu-cli/src/main.rs`, `cli/inactu-cli/tests/threat_model_gates.rs` |
-| `IC-03` | Tamper-evident execution receipts and verification | Deterministic receipt hash + `verify-receipt`; structured observability events | `spec/execution-receipt.schema.json`, `cli/inactu-cli/tests/receipt.rs`, `docs/observability.md` |
-| `IC-04` | Secure software supply chain checks | Conformance + security checks, SBOM generation, vuln scan, signed publish workflow | `.github/workflows/conformance.yml`, `.github/workflows/security.yml`, `.github/workflows/release-skill.yml` |
-| `IC-05` | Security configuration documentation and change control | Versioned specs + threat model + control checklist | `SPEC.md`, `spec/threat-model.md`, `docs/threat-model-controls.md` |
-| `IC-06` | Incident evidence support and forensic traceability | Verifiable receipts, deterministic command outputs, policy and artifact identifiers | `cli/inactu-cli/README.md`, runtime receipt files, CI logs |
+| `IC-01` | Artifact integrity and signature verification before execution | `pack/sign/verify/run` flow validates digests and signatures; optional `--require-cosign --oci-ref` gate | `/Users/jove/code/inactu/cli/inactu-cli/src/main.rs`, `/Users/jove/code/inactu/cli/inactu-cli/tests/pack_sign.rs`, `/Users/jove/code/inactu/.github/workflows/release-skill.yml` |
+| `IC-02` | Least-privilege execution (capability ceilings + trusted signers) | Policy parsing and enforcement before execution | `/Users/jove/code/inactu/spec/policy/policy.md`, `/Users/jove/code/inactu/cli/inactu-cli/src/main.rs`, `/Users/jove/code/inactu/cli/inactu-cli/tests/threat_model_gates.rs` |
+| `IC-03` | Tamper-evident execution receipts and verification | Deterministic receipt hash + `verify-receipt`; structured observability events | `/Users/jove/code/inactu/spec/execution-receipt.schema.json`, `/Users/jove/code/inactu/cli/inactu-cli/tests/receipt.rs`, `/Users/jove/code/inactu/docs/observability.md` |
+| `IC-04` | Secure software supply chain checks | Conformance + security checks, SBOM generation, vuln scan, signed publish workflow | `/Users/jove/code/inactu/.github/workflows/conformance.yml`, `/Users/jove/code/inactu/.github/workflows/security.yml`, `/Users/jove/code/inactu/.github/workflows/release-skill.yml` |
+| `IC-05` | Security configuration documentation and change control | Versioned specs + threat model + control checklist | `/Users/jove/code/inactu/SPEC.md`, `/Users/jove/code/inactu/spec/threat-model.md`, `/Users/jove/code/inactu/docs/threat-model-controls.md` |
+| `IC-06` | Incident evidence support and forensic traceability | Verifiable receipts, deterministic command outputs, policy and artifact identifiers | `/Users/jove/code/inactu/cli/inactu-cli/README.md`, runtime receipt files, CI logs |
 
 ## Mapping to HIPAA Security Rule (45 CFR Part 164 Subpart C)
 

@@ -1,7 +1,7 @@
 # RFC: Skill Manifest v1 (Draft)
 
 Status: Draft  
-Owner: Inactu Maintainers  
+Owner: TBD  
 Last Updated: 2026-02-06
 
 This RFC is non-normative until promoted into `SPEC.md`.
