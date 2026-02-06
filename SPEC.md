@@ -4,6 +4,17 @@ This file is the top-level specification index for Inactu v0.
 Normative detail lives under `spec/`.
 Repository scope boundaries are defined in `AGENTS.md`.
 
+## Current Focus
+
+As of 2026-02-06, project focus is to stabilize core skill execution contracts
+before expanding ecosystem surface area.
+
+Priority order:
+1. Native skill contract stability (manifest, policy, receipt).
+2. Conformance coverage and deterministic behavior hardening.
+3. One frictionless golden CLI workflow.
+4. Optional ecosystem adapters only after core contract gates pass.
+
 ## Scope
 
 Inactu is a secure execution substrate for immutable, verifiable skills.
@@ -24,6 +35,7 @@ Inactu does not include:
 
 The following files are normative for v0:
 - `spec/threat-model.md`
+- `spec/compatibility.md`
 - `spec/hashing.md`
 - `spec/packaging.md`
 - `spec/conformance.md`
@@ -43,6 +55,7 @@ The following files are normative for v0:
 - Hash: SHA-256
 - Signature algorithm: Ed25519
 - Digest prefix format: `sha256:<hex>`
+- Registry transport checksum format: `<32 lowercase hex chars>` in registry entry `md5` fields
 - Skill artifact authority: `manifest.artifact`
 - Exact hash/signature preimages: `spec/hashing.md`
 
@@ -82,6 +95,9 @@ Receipt shape is defined by `spec/execution-receipt.schema.json`.
 Failed executions SHOULD emit a best-effort failure transcript outside the
 success receipt schema.
 
+CLI contract: `inactu-cli run` requires `--receipt`; there is no successful run
+path without writing a receipt file.
+
 ## v0 Non-Goals
 
 - blockchain anchoring
@@ -89,3 +105,10 @@ success receipt schema.
 - multi-signer quorum policy logic
 - native non-WASM execution
 - UI orchestration features
+
+## Expansion Gate (Post-v0/v1 Drafts)
+
+New integration surfaces (including adapters) MUST wait until all are true:
+1. Draft schemas for manifest v1 and receipt v1 exist and are reviewable.
+2. Core verification and receipt behavior are covered by conformance vectors.
+3. Golden `pack -> sign -> verify -> run -> receipt-verify` workflow is stable.

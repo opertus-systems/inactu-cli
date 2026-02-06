@@ -2,11 +2,41 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::{Signature, Verifier as _, VerifyingKey};
+use md5::Md5;
 use serde::{Deserialize, Serialize};
 use serde_json::de::from_slice;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 use url::Url;
+
+pub const MANIFEST_V0_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/skill-format/manifest.schema.json"
+));
+pub const MANIFEST_V1_DRAFT_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/skill-format/manifest.v1.experimental.schema.json"
+));
+pub const SIGNATURES_V0_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/skill-format/signatures.schema.json"
+));
+pub const PROVENANCE_V0_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/skill-format/provenance.schema.json"
+));
+pub const POLICY_V0_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/policy/policy.schema.json"
+));
+pub const RECEIPT_V0_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/execution-receipt.schema.json"
+));
+pub const RECEIPT_V1_DRAFT_SCHEMA_JSON: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../spec/execution-receipt.v1.experimental.schema.json"
+));
 
 #[derive(Debug, Error)]
 pub enum VerifyError {
@@ -30,6 +60,16 @@ pub enum VerifyError {
     CanonicalJson,
     #[error("invalid manifest JSON")]
     ManifestJson,
+    #[error("unsupported manifest schema version: {0}")]
+    UnsupportedManifestSchemaVersion(String),
+    #[error("invalid manifest v1 draft JSON")]
+    ManifestV1DraftJson,
+    #[error("unsupported receipt schema version: {0}")]
+    UnsupportedReceiptSchemaVersion(String),
+    #[error("invalid receipt v1 draft JSON")]
+    ReceiptV1DraftJson,
+    #[error("invalid draft field: {0}")]
+    InvalidDraftField(String),
     #[error("invalid signatures JSON")]
     SignaturesJson,
     #[error("invalid provenance JSON")]
@@ -66,12 +106,64 @@ pub struct Capability {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<String>,
     pub name: String,
     pub version: String,
     pub entrypoint: String,
     pub artifact: String,
     pub capabilities: Vec<Capability>,
     pub signers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifestV1Draft {
+    pub schema_version: String,
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    pub version: String,
+    pub entrypoint: EntryPointV1Draft,
+    pub artifact: String,
+    pub inputs_schema: JsonSchemaRefV1Draft,
+    pub outputs_schema: JsonSchemaRefV1Draft,
+    pub capabilities: Vec<Capability>,
+    pub signers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compatibility: Option<CompatibilityV1Draft>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum EntryPointV1Draft {
+    Name(String),
+    Descriptor(EntryPointDescriptorV1Draft),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EntryPointDescriptorV1Draft {
+    pub kind: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JsonSchemaRefV1Draft {
+    Inline(serde_json::Value),
+    Uri(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompatibilityV1Draft {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_profiles: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adapter_profiles: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,10 +193,17 @@ pub struct Provenance {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RegistryEntry {
+    pub sha256: String,
+    pub md5: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RegistrySnapshot {
     pub snapshot_hash: String,
     pub timestamp: u64,
-    pub entries: BTreeMap<String, String>,
+    pub entries: BTreeMap<String, RegistryEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,6 +219,56 @@ pub struct ExecutionReceipt {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ExecutionReceiptV1Draft {
+    pub schema_version: String,
+    pub artifact: String,
+    pub manifest_hash: String,
+    pub policy_hash: String,
+    pub bundle_hash: String,
+    pub inputs_hash: String,
+    pub outputs_hash: String,
+    pub runtime_version_digest: String,
+    pub result_digest: String,
+    pub caps_requested: Vec<String>,
+    pub caps_granted: Vec<String>,
+    pub caps_used: Vec<String>,
+    pub result: ExecutionResultV1Draft,
+    pub runtime: RuntimeV1Draft,
+    pub started_at: u64,
+    pub finished_at: u64,
+    pub timestamp_strategy: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attestations: Option<Vec<AttestationV1Draft>>,
+    pub receipt_hash: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionResultV1Draft {
+    pub status: String,
+    pub code: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeV1Draft {
+    pub name: String,
+    pub version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AttestationV1Draft {
+    pub r#type: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Policy {
     pub version: u64,
     pub trusted_signers: Vec<String>,
@@ -131,6 +280,8 @@ pub struct Policy {
 pub struct CapabilityCeiling {
     pub fs: Option<PolicyFs>,
     pub net: Option<Vec<String>>,
+    pub kv: Option<PolicyKv>,
+    pub queue: Option<PolicyQueue>,
     pub env: Option<Vec<String>>,
     pub exec: Option<bool>,
     pub time: Option<bool>,
@@ -143,10 +294,24 @@ pub struct PolicyFs {
     pub write: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyKv {
+    pub read: Option<Vec<String>>,
+    pub write: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyQueue {
+    pub publish: Option<Vec<String>>,
+    pub consume: Option<Vec<String>>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct SnapshotHashPayload<'a> {
     timestamp: u64,
-    entries: &'a BTreeMap<String, String>,
+    entries: &'a BTreeMap<String, RegistryEntry>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -158,14 +323,142 @@ struct ReceiptHashPayload<'a> {
     timestamp: u64,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct BundleHashPayload<'a> {
+    artifact: &'a str,
+    manifest_hash: &'a str,
+    signatures_hash: &'a str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ReceiptV1DraftHashPayload<'a> {
+    schema_version: &'a str,
+    artifact: &'a str,
+    manifest_hash: &'a str,
+    policy_hash: &'a str,
+    bundle_hash: &'a str,
+    inputs_hash: &'a str,
+    outputs_hash: &'a str,
+    runtime_version_digest: &'a str,
+    result_digest: &'a str,
+    caps_requested: &'a [String],
+    caps_granted: &'a [String],
+    caps_used: &'a [String],
+    result: &'a ExecutionResultV1Draft,
+    runtime: &'a RuntimeV1Draft,
+    started_at: u64,
+    finished_at: u64,
+    timestamp_strategy: &'a str,
+    attestations: Option<&'a [AttestationV1Draft]>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ResultDigestPayload<'a> {
+    status: &'a str,
+    code: &'a str,
+    outputs_hash: &'a str,
+    caps_used: &'a [String],
+}
+
 pub fn sha256_prefixed(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     format!("sha256:{digest:x}")
 }
 
+pub fn md5_hex(bytes: &[u8]) -> String {
+    let digest = Md5::digest(bytes);
+    format!("{digest:x}")
+}
+
 pub fn parse_manifest_json(bytes: &[u8]) -> Result<Manifest, VerifyError> {
     let manifest: Manifest = from_slice(bytes).map_err(|_| VerifyError::ManifestJson)?;
+    if let Some(version) = manifest.schema_version.as_deref() {
+        if version != "1.0.0-draft" {
+            return Err(VerifyError::UnsupportedManifestSchemaVersion(
+                version.to_string(),
+            ));
+        }
+    }
     validate_sha256_prefixed(&manifest.artifact)?;
+    Ok(manifest)
+}
+
+pub fn parse_manifest_v1_draft_json(bytes: &[u8]) -> Result<ManifestV1Draft, VerifyError> {
+    let manifest: ManifestV1Draft =
+        from_slice(bytes).map_err(|_| VerifyError::ManifestV1DraftJson)?;
+    if manifest.schema_version != "1.0.0-draft" {
+        return Err(VerifyError::UnsupportedManifestSchemaVersion(
+            manifest.schema_version.clone(),
+        ));
+    }
+    if manifest.id.is_empty() {
+        return Err(VerifyError::InvalidDraftField(
+            "manifest.id must be non-empty".to_string(),
+        ));
+    }
+    if manifest.version.is_empty() {
+        return Err(VerifyError::InvalidDraftField(
+            "manifest.version must be non-empty".to_string(),
+        ));
+    }
+    validate_sha256_prefixed(&manifest.artifact)?;
+    match &manifest.entrypoint {
+        EntryPointV1Draft::Name(name) => {
+            if name.is_empty() {
+                return Err(VerifyError::InvalidDraftField(
+                    "manifest.entrypoint must be non-empty".to_string(),
+                ));
+            }
+        }
+        EntryPointV1Draft::Descriptor(descriptor) => {
+            if !(descriptor.kind == "wasi-command" || descriptor.kind == "wasi-reactor") {
+                return Err(VerifyError::InvalidDraftField(
+                    "manifest.entrypoint.kind must be wasi-command or wasi-reactor".to_string(),
+                ));
+            }
+            if descriptor.path.is_empty() {
+                return Err(VerifyError::InvalidDraftField(
+                    "manifest.entrypoint.path must be non-empty".to_string(),
+                ));
+            }
+        }
+    }
+    validate_json_schema_ref(&manifest.inputs_schema, "manifest.inputs_schema")?;
+    validate_json_schema_ref(&manifest.outputs_schema, "manifest.outputs_schema")?;
+    if manifest
+        .capabilities
+        .iter()
+        .any(|cap| cap.kind.is_empty() || cap.value.is_empty())
+    {
+        return Err(VerifyError::InvalidDraftField(
+            "manifest.capabilities items must have non-empty kind/value".to_string(),
+        ));
+    }
+    if manifest.signers.iter().any(String::is_empty) {
+        return Err(VerifyError::InvalidDraftField(
+            "manifest.signers items must be non-empty".to_string(),
+        ));
+    }
+    if let Some(compatibility) = &manifest.compatibility {
+        if compatibility
+            .runtime_profiles
+            .as_ref()
+            .is_some_and(|items| items.iter().any(String::is_empty))
+        {
+            return Err(VerifyError::InvalidDraftField(
+                "manifest.compatibility.runtime_profiles items must be non-empty".to_string(),
+            ));
+        }
+        if compatibility
+            .adapter_profiles
+            .as_ref()
+            .is_some_and(|items| items.iter().any(String::is_empty))
+        {
+            return Err(VerifyError::InvalidDraftField(
+                "manifest.compatibility.adapter_profiles items must be non-empty".to_string(),
+            ));
+        }
+    }
     Ok(manifest)
 }
 
@@ -190,8 +483,9 @@ pub fn parse_provenance_json(bytes: &[u8]) -> Result<Provenance, VerifyError> {
 pub fn parse_snapshot_json(bytes: &[u8]) -> Result<RegistrySnapshot, VerifyError> {
     let snapshot: RegistrySnapshot = from_slice(bytes).map_err(|_| VerifyError::SnapshotJson)?;
     validate_sha256_prefixed(&snapshot.snapshot_hash)?;
-    for digest in snapshot.entries.values() {
-        validate_sha256_prefixed(digest)?;
+    for entry in snapshot.entries.values() {
+        validate_sha256_prefixed(&entry.sha256)?;
+        validate_md5_hex(&entry.md5)?;
     }
     Ok(snapshot)
 }
@@ -202,6 +496,75 @@ pub fn parse_receipt_json(bytes: &[u8]) -> Result<ExecutionReceipt, VerifyError>
     validate_sha256_prefixed(&receipt.inputs_hash)?;
     validate_sha256_prefixed(&receipt.outputs_hash)?;
     validate_sha256_prefixed(&receipt.receipt_hash)?;
+    Ok(receipt)
+}
+
+pub fn parse_receipt_v1_draft_json(bytes: &[u8]) -> Result<ExecutionReceiptV1Draft, VerifyError> {
+    let receipt: ExecutionReceiptV1Draft =
+        from_slice(bytes).map_err(|_| VerifyError::ReceiptV1DraftJson)?;
+    if receipt.schema_version != "1.0.0-draft" {
+        return Err(VerifyError::UnsupportedReceiptSchemaVersion(
+            receipt.schema_version.clone(),
+        ));
+    }
+    for digest in [
+        &receipt.artifact,
+        &receipt.manifest_hash,
+        &receipt.policy_hash,
+        &receipt.bundle_hash,
+        &receipt.inputs_hash,
+        &receipt.outputs_hash,
+        &receipt.runtime_version_digest,
+        &receipt.result_digest,
+        &receipt.receipt_hash,
+    ] {
+        validate_sha256_prefixed(digest)?;
+    }
+    if receipt
+        .caps_requested
+        .iter()
+        .chain(receipt.caps_granted.iter())
+        .chain(receipt.caps_used.iter())
+        .any(String::is_empty)
+    {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt capability fields must not contain empty items".to_string(),
+        ));
+    }
+    if !(receipt.result.status == "success" || receipt.result.status == "failure") {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt.result.status must be success or failure".to_string(),
+        ));
+    }
+    if receipt.result.code.is_empty() {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt.result.code must be non-empty".to_string(),
+        ));
+    }
+    if receipt.runtime.name.is_empty() || receipt.runtime.version.is_empty() {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt.runtime.name/version must be non-empty".to_string(),
+        ));
+    }
+    if receipt.finished_at < receipt.started_at {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt.finished_at must be >= receipt.started_at".to_string(),
+        ));
+    }
+    if receipt.timestamp_strategy != "local_untrusted_unix_seconds" {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt.timestamp_strategy must be local_untrusted_unix_seconds".to_string(),
+        ));
+    }
+    if receipt.attestations.as_ref().is_some_and(|items| {
+        items
+            .iter()
+            .any(|item| item.r#type.is_empty() || item.value.is_empty())
+    }) {
+        return Err(VerifyError::InvalidDraftField(
+            "receipt.attestations items must have non-empty type/value".to_string(),
+        ));
+    }
     Ok(receipt)
 }
 
@@ -229,6 +592,32 @@ pub fn verify_artifact_hash(skill_wasm: &[u8], expected_artifact: &str) -> Resul
             actual,
         });
     }
+    Ok(())
+}
+
+pub fn verify_registry_entry_artifact(
+    artifact_bytes: &[u8],
+    entry: &RegistryEntry,
+) -> Result<(), VerifyError> {
+    validate_sha256_prefixed(&entry.sha256)?;
+    validate_md5_hex(&entry.md5)?;
+
+    let actual_md5 = md5_hex(artifact_bytes);
+    if actual_md5 != entry.md5 {
+        return Err(VerifyError::DigestMismatch {
+            expected: entry.md5.clone(),
+            actual: actual_md5,
+        });
+    }
+
+    let actual_sha256 = sha256_prefixed(artifact_bytes);
+    if actual_sha256 != entry.sha256 {
+        return Err(VerifyError::DigestMismatch {
+            expected: entry.sha256.clone(),
+            actual: actual_sha256,
+        });
+    }
+
     Ok(())
 }
 
@@ -271,6 +660,27 @@ pub fn verify_receipt_hash(receipt: &ExecutionReceipt) -> Result<(), VerifyError
     Ok(())
 }
 
+pub fn verify_receipt_v1_draft_hash(receipt: &ExecutionReceiptV1Draft) -> Result<(), VerifyError> {
+    validate_sha256_prefixed(&receipt.artifact)?;
+    validate_sha256_prefixed(&receipt.manifest_hash)?;
+    validate_sha256_prefixed(&receipt.policy_hash)?;
+    validate_sha256_prefixed(&receipt.bundle_hash)?;
+    validate_sha256_prefixed(&receipt.inputs_hash)?;
+    validate_sha256_prefixed(&receipt.outputs_hash)?;
+    validate_sha256_prefixed(&receipt.runtime_version_digest)?;
+    validate_sha256_prefixed(&receipt.result_digest)?;
+    validate_sha256_prefixed(&receipt.receipt_hash)?;
+
+    let actual = compute_receipt_v1_draft_hash(receipt)?;
+    if actual != receipt.receipt_hash {
+        return Err(VerifyError::DigestMismatch {
+            expected: receipt.receipt_hash.clone(),
+            actual,
+        });
+    }
+    Ok(())
+}
+
 pub fn compute_receipt_hash(
     artifact: &str,
     inputs_hash: &str,
@@ -284,6 +694,83 @@ pub fn compute_receipt_hash(
         outputs_hash,
         caps_used,
         timestamp,
+    };
+    let bytes = to_jcs_bytes(&payload)?;
+    Ok(sha256_prefixed(&bytes))
+}
+
+pub fn compute_signatures_hash(signatures: &Signatures) -> Result<String, VerifyError> {
+    let bytes = to_jcs_bytes(signatures)?;
+    Ok(sha256_prefixed(&bytes))
+}
+
+pub fn compute_policy_hash(policy: &Policy) -> Result<String, VerifyError> {
+    let bytes = to_jcs_bytes(policy)?;
+    Ok(sha256_prefixed(&bytes))
+}
+
+pub fn compute_bundle_hash(
+    artifact: &str,
+    manifest_hash: &str,
+    signatures: &Signatures,
+) -> Result<String, VerifyError> {
+    validate_sha256_prefixed(artifact)?;
+    validate_sha256_prefixed(manifest_hash)?;
+    let signatures_hash = compute_signatures_hash(signatures)?;
+    let payload = BundleHashPayload {
+        artifact,
+        manifest_hash,
+        signatures_hash: &signatures_hash,
+    };
+    let bytes = to_jcs_bytes(&payload)?;
+    Ok(sha256_prefixed(&bytes))
+}
+
+pub fn compute_runtime_version_digest_v1(
+    runtime: &RuntimeV1Draft,
+) -> Result<String, VerifyError> {
+    let bytes = to_jcs_bytes(runtime)?;
+    Ok(sha256_prefixed(&bytes))
+}
+
+pub fn compute_result_digest_v1(
+    result: &ExecutionResultV1Draft,
+    outputs_hash: &str,
+    caps_used: &[String],
+) -> Result<String, VerifyError> {
+    validate_sha256_prefixed(outputs_hash)?;
+    let payload = ResultDigestPayload {
+        status: &result.status,
+        code: &result.code,
+        outputs_hash,
+        caps_used,
+    };
+    let bytes = to_jcs_bytes(&payload)?;
+    Ok(sha256_prefixed(&bytes))
+}
+
+pub fn compute_receipt_v1_draft_hash(
+    receipt: &ExecutionReceiptV1Draft,
+) -> Result<String, VerifyError> {
+    let payload = ReceiptV1DraftHashPayload {
+        schema_version: &receipt.schema_version,
+        artifact: &receipt.artifact,
+        manifest_hash: &receipt.manifest_hash,
+        policy_hash: &receipt.policy_hash,
+        bundle_hash: &receipt.bundle_hash,
+        inputs_hash: &receipt.inputs_hash,
+        outputs_hash: &receipt.outputs_hash,
+        runtime_version_digest: &receipt.runtime_version_digest,
+        result_digest: &receipt.result_digest,
+        caps_requested: &receipt.caps_requested,
+        caps_granted: &receipt.caps_granted,
+        caps_used: &receipt.caps_used,
+        result: &receipt.result,
+        runtime: &receipt.runtime,
+        started_at: receipt.started_at,
+        finished_at: receipt.finished_at,
+        timestamp_strategy: &receipt.timestamp_strategy,
+        attestations: receipt.attestations.as_deref(),
     };
     let bytes = to_jcs_bytes(&payload)?;
     Ok(sha256_prefixed(&bytes))
@@ -383,6 +870,37 @@ fn validate_sha256_prefixed(value: &str) -> Result<(), VerifyError> {
     Ok(())
 }
 
+fn validate_md5_hex(value: &str) -> Result<(), VerifyError> {
+    if value.len() != 32 {
+        return Err(VerifyError::InvalidDigestFormat(value.to_string()));
+    }
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return Err(VerifyError::InvalidDigestFormat(value.to_string()));
+    }
+    Ok(())
+}
+
+fn validate_json_schema_ref(value: &JsonSchemaRefV1Draft, field: &str) -> Result<(), VerifyError> {
+    match value {
+        JsonSchemaRefV1Draft::Inline(json) => {
+            if !json.is_object() {
+                return Err(VerifyError::InvalidDraftField(format!(
+                    "{field} inline schema must be a JSON object"
+                )));
+            }
+        }
+        JsonSchemaRefV1Draft::Uri(uri) => {
+            Url::parse(uri).map_err(|_| {
+                VerifyError::InvalidDraftField(format!("{field} URI must be absolute and valid"))
+            })?;
+        }
+    }
+    Ok(())
+}
+
 fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -> bool {
     match capability.kind.as_str() {
         "fs.read" => {
@@ -417,7 +935,7 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
                     .unwrap_or(false)
             })
         }
-        "net" => {
+        "net" | "net.http" => {
             let Ok(requested) = Url::parse(&capability.value) else {
                 return false;
             };
@@ -442,6 +960,52 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
         }
         "exec" => capability.value == "true" && ceiling.exec.unwrap_or(false),
         "time" => capability.value == "true" && ceiling.time.unwrap_or(false),
+        "time.now" => !capability.value.is_empty() && ceiling.time.unwrap_or(false),
+        "random.bytes" => !capability.value.is_empty() && ceiling.time.unwrap_or(false),
+        "kv.read" => {
+            let Some(kv) = &ceiling.kv else {
+                return false;
+            };
+            let Some(allowed) = &kv.read else {
+                return false;
+            };
+            allowed
+                .iter()
+                .any(|item| item == "*" || item == &capability.value)
+        }
+        "kv.write" => {
+            let Some(kv) = &ceiling.kv else {
+                return false;
+            };
+            let Some(allowed) = &kv.write else {
+                return false;
+            };
+            allowed
+                .iter()
+                .any(|item| item == "*" || item == &capability.value)
+        }
+        "queue.publish" => {
+            let Some(queue) = &ceiling.queue else {
+                return false;
+            };
+            let Some(allowed) = &queue.publish else {
+                return false;
+            };
+            allowed
+                .iter()
+                .any(|item| item == "*" || item == &capability.value)
+        }
+        "queue.consume" => {
+            let Some(queue) = &ceiling.queue else {
+                return false;
+            };
+            let Some(allowed) = &queue.consume else {
+                return false;
+            };
+            allowed
+                .iter()
+                .any(|item| item == "*" || item == &capability.value)
+        }
         _ => false,
     }
 }
@@ -586,6 +1150,38 @@ fn validate_policy_constraints(policy: &Policy) -> Result<(), VerifyError> {
             ));
         }
     }
+    if let Some(kv) = &ceiling.kv {
+        if let Some(read) = &kv.read {
+            if has_duplicates(read) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.kv.read items must be unique".to_string(),
+                ));
+            }
+        }
+        if let Some(write) = &kv.write {
+            if has_duplicates(write) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.kv.write items must be unique".to_string(),
+                ));
+            }
+        }
+    }
+    if let Some(queue) = &ceiling.queue {
+        if let Some(publish) = &queue.publish {
+            if has_duplicates(publish) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.queue.publish items must be unique".to_string(),
+                ));
+            }
+        }
+        if let Some(consume) = &queue.consume {
+            if has_duplicates(consume) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.queue.consume items must be unique".to_string(),
+                ));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -607,6 +1203,7 @@ mod tests {
     #[test]
     fn parses_manifest_json() {
         let raw = br#"{
+            "schema_version":"1.0.0-draft",
             "name":"echo",
             "version":"1.0.0",
             "entrypoint":"run",
@@ -632,6 +1229,23 @@ mod tests {
         assert!(matches!(
             parse_manifest_json(raw),
             Err(VerifyError::ManifestJson)
+        ));
+    }
+
+    #[test]
+    fn rejects_manifest_json_with_unsupported_schema_version() {
+        let raw = br#"{
+            "schema_version":"9.9.9",
+            "name":"echo",
+            "version":"1.0.0",
+            "entrypoint":"run",
+            "artifact":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "capabilities":[],
+            "signers":[]
+        }"#;
+        assert!(matches!(
+            parse_manifest_json(raw),
+            Err(VerifyError::UnsupportedManifestSchemaVersion(_))
         ));
     }
 
@@ -678,7 +1292,12 @@ mod tests {
         let raw = br#"{
             "snapshot_hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "timestamp":1,
-            "entries":{"echo@1.0.0":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+            "entries":{
+                "echo@1.0.0":{
+                    "sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "md5":"cccccccccccccccccccccccccccccccc"
+                }
+            }
         }"#;
         let snapshot = parse_snapshot_json(raw).expect("snapshot should parse");
         assert_eq!(snapshot.entries.len(), 1);
@@ -706,6 +1325,29 @@ mod tests {
     }
 
     #[test]
+    fn verifies_registry_entry_artifact_hashes() {
+        let bytes = b"hello world";
+        let entry = RegistryEntry {
+            sha256: sha256_prefixed(bytes),
+            md5: md5_hex(bytes),
+        };
+        assert!(verify_registry_entry_artifact(bytes, &entry).is_ok());
+    }
+
+    #[test]
+    fn rejects_registry_entry_on_md5_mismatch() {
+        let bytes = b"hello world";
+        let entry = RegistryEntry {
+            sha256: sha256_prefixed(bytes),
+            md5: "00000000000000000000000000000000".to_string(),
+        };
+        assert!(matches!(
+            verify_registry_entry_artifact(bytes, &entry),
+            Err(VerifyError::DigestMismatch { .. })
+        ));
+    }
+
+    #[test]
     fn rejects_bad_artifact_hash() {
         let wasm = b"\0asm";
         let bad = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
@@ -720,7 +1362,11 @@ mod tests {
         let mut entries = BTreeMap::new();
         entries.insert(
             "echo@1.0.0".to_string(),
-            "sha256:1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+            RegistryEntry {
+                sha256: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                    .to_string(),
+                md5: "11111111111111111111111111111111".to_string(),
+            },
         );
 
         let payload = SnapshotHashPayload {
@@ -756,6 +1402,84 @@ mod tests {
             receipt_hash: expected,
         };
         assert!(verify_receipt_hash(&receipt).is_ok());
+    }
+
+    #[test]
+    fn verifies_receipt_v1_draft_hash_with_security_digests() {
+        let signatures = Signatures {
+            artifact: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            manifest_hash:
+                "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                    .to_string(),
+            signatures: vec![SignatureEntry {
+                signer: "alice.dev".to_string(),
+                algorithm: "ed25519".to_string(),
+                signature: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".to_string(),
+            }],
+        };
+        let policy = Policy {
+            version: 1,
+            trusted_signers: vec!["alice.dev".to_string()],
+            capability_ceiling: CapabilityCeiling {
+                fs: None,
+                net: None,
+                kv: None,
+                queue: None,
+                env: None,
+                exec: Some(false),
+                time: Some(false),
+            },
+        };
+        let runtime = RuntimeV1Draft {
+            name: "inactu-cli".to_string(),
+            version: "0.1.0".to_string(),
+            profile: Some("wasmtime36-hostabi-v0".to_string()),
+        };
+        let result = ExecutionResultV1Draft {
+            status: "success".to_string(),
+            code: "ok".to_string(),
+            message: None,
+        };
+        let caps_used = vec!["env:HOME".to_string()];
+        let outputs_hash =
+            "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                .to_string();
+        let runtime_version_digest = compute_runtime_version_digest_v1(&runtime).unwrap();
+        let result_digest = compute_result_digest_v1(&result, &outputs_hash, &caps_used).unwrap();
+        let policy_hash = compute_policy_hash(&policy).unwrap();
+        let bundle_hash = compute_bundle_hash(
+            &signatures.artifact,
+            &signatures.manifest_hash,
+            &signatures,
+        )
+        .unwrap();
+
+        let mut receipt = ExecutionReceiptV1Draft {
+            schema_version: "1.0.0-draft".to_string(),
+            artifact: signatures.artifact.clone(),
+            manifest_hash: signatures.manifest_hash.clone(),
+            policy_hash,
+            bundle_hash,
+            inputs_hash:
+                "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                    .to_string(),
+            outputs_hash: outputs_hash.clone(),
+            runtime_version_digest,
+            result_digest,
+            caps_requested: vec!["env:HOME".to_string()],
+            caps_granted: vec!["env:HOME".to_string()],
+            caps_used,
+            result,
+            runtime,
+            started_at: 10,
+            finished_at: 11,
+            timestamp_strategy: "local_untrusted_unix_seconds".to_string(),
+            attestations: None,
+            receipt_hash: String::new(),
+        };
+        receipt.receipt_hash = compute_receipt_v1_draft_hash(&receipt).unwrap();
+        assert!(verify_receipt_v1_draft_hash(&receipt).is_ok());
     }
 
     #[test]
@@ -816,6 +1540,7 @@ capability_ceiling:
     #[test]
     fn verifies_trusted_signer_intersection() {
         let manifest = Manifest {
+            schema_version: None,
             name: "echo".to_string(),
             version: "1.0.0".to_string(),
             entrypoint: "run".to_string(),
@@ -841,6 +1566,8 @@ capability_ceiling:
             capability_ceiling: CapabilityCeiling {
                 fs: None,
                 net: None,
+                kv: None,
+                queue: None,
                 env: None,
                 exec: Some(false),
                 time: Some(false),
@@ -852,6 +1579,7 @@ capability_ceiling:
     #[test]
     fn rejects_signature_signer_not_declared_in_manifest() {
         let manifest = Manifest {
+            schema_version: None,
             name: "echo".to_string(),
             version: "1.0.0".to_string(),
             entrypoint: "run".to_string(),
@@ -877,6 +1605,8 @@ capability_ceiling:
             capability_ceiling: CapabilityCeiling {
                 fs: None,
                 net: None,
+                kv: None,
+                queue: None,
                 env: None,
                 exec: Some(false),
                 time: Some(false),
@@ -891,6 +1621,7 @@ capability_ceiling:
     #[test]
     fn rejects_split_trust_between_manifest_and_signatures() {
         let manifest = Manifest {
+            schema_version: None,
             name: "echo".to_string(),
             version: "1.0.0".to_string(),
             entrypoint: "run".to_string(),
@@ -916,6 +1647,8 @@ capability_ceiling:
             capability_ceiling: CapabilityCeiling {
                 fs: None,
                 net: None,
+                kv: None,
+                queue: None,
                 env: None,
                 exec: Some(false),
                 time: Some(false),
@@ -935,6 +1668,8 @@ capability_ceiling:
             capability_ceiling: CapabilityCeiling {
                 fs: None,
                 net: Some(vec!["https://api.example.com".to_string()]),
+                kv: None,
+                queue: None,
                 env: None,
                 exec: Some(false),
                 time: Some(false),
@@ -958,6 +1693,8 @@ capability_ceiling:
             capability_ceiling: CapabilityCeiling {
                 fs: None,
                 net: Some(vec!["https://api.example.com".to_string()]),
+                kv: None,
+                queue: None,
                 env: None,
                 exec: Some(false),
                 time: Some(false),

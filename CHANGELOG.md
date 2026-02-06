@@ -20,6 +20,16 @@ Versioning.
 - `docs/getting-started.md` secure quickstart.
 - Release artifact workflow with attached checksums and SBOMs.
 - `docs/observability.md` runtime telemetry and metric contract.
+- `spec/compatibility.md` with stable-vs-experimental compatibility rules and
+  v0 receipt/runtime profile boundaries.
+- Draft v1 receipt security digests:
+  - `bundle_hash`
+  - `runtime_version_digest`
+  - `result_digest`
+  - `timestamp_strategy`
+  with verifier helpers and hash-verification support.
+- CLI receipt format selection: `run --receipt-format <v0|v1-draft>`.
+- `verify-receipt` support for v1 draft receipt hash verification.
 
 ### Changed
 - Signature payloads now bind to canonical `manifest_hash`.
@@ -29,6 +39,13 @@ Versioning.
 - CLI internals refactored into cohesive modules for maintainability.
 - Integration tests consolidated with shared test helpers.
 - CLI success output normalized to `OK <command> ...` format.
+- Threat model now specifies determinism assumptions, explicit
+  side-channel/time/entropy/network boundaries, and host trust limits.
+- README/SPEC/runtime docs now explicitly state v0 receipt requirement for
+  successful runs, WASI non-goal status in v0 runtime profile, and that
+  reproducible build proofs are not yet a shipped v0 guarantee.
+- `spec/hashing.md` now specifies v1 draft receipt preimage and bundle-hash
+  preimage rules.
 
 ## [0.1.0] - 2026-02-06
 

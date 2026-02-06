@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0-draft",
+  "artifact": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "manifest_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "policy_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "bundle_hash": "sha256:abababababababababababababababababababababababababababababababab",
+  "inputs_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "outputs_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "runtime_version_digest": "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+  "result_digest": "sha256:3434343434343434343434343434343434343434343434343434343434343434",
+  "caps_requested": [
+    "net:https://example.com"
+  ],
+  "caps_granted": [
+    "net:https://example.com"
+  ],
+  "caps_used": [
+    "net:https://example.com"
+  ],
+  "result": {
+    "status": "success",
+    "code": "ok"
+  },
+  "runtime": {
+    "name": "inactu-runtime",
+    "version": "0.1.0",
+    "profile": "v1-draft"
+  },
+  "started_at": 1738848000,
+  "finished_at": 1738848001,
+  "timestamp_strategy": "local_untrusted_unix_seconds",
+  "attestations": [
+    {
+      "type": "sigstore",
+      "value": "rekor://example/entry/123"
+    }
+  ],
+  "receipt_hash": "sha256:d56ce67230384f70f9327ae0b8ae140a261a96b629371d29d923cb5540758b3e"
+}

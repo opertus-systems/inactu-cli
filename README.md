@@ -1,10 +1,13 @@
 # Inactu
 
-Verifiable execution of immutable skills.
+Verifiable execution substrate for immutable skills.
 
-Inactu is a secure execution substrate for running immutable, attestable
-executables ("skills") with explicit capabilities, reproducible builds, and
-enforceable provenance.
+## About Inactu
+
+Inactu verifies and executes immutable, attestable skills with strict
+capability controls, deterministic verification/execution contracts, and signed
+provenance. It is an execution substrate, not an agent framework: packaging,
+signing, verification, and policy-constrained runtime with auditable receipts.
 
 ## What Inactu Is
 
@@ -71,9 +74,25 @@ out of the verifier core.
 
 v0.1.0 baseline released; current work is hardening and operational polish.
 
+Stability notes:
+- v0 bundle/manifest/policy/receipt schemas are normative and SemVer-governed.
+- Fields and commands marked `experimental` are explicitly unstable.
+- `inactu-cli run` requires `--receipt`; successful runs always emit a receipt.
+- External timestamp authority is out of scope for v0 receipts.
+- Reproducible builds are a roadmap objective; v0 does not yet publish CI build
+  reproducibility proofs.
+
+Compatibility policy is defined in `spec/compatibility.md`.
+
 ## Security Model
 
 Assumptions and non-goals are defined in `spec/threat-model.md`.
+
+## Runtime Profile (v0)
+
+- Artifact format: WebAssembly module (`.wasm`) validated by Wasmtime.
+- Host interface: Inactu host ABI (`docs/runtime-host-abi.md`).
+- WASI imports are not part of the v0 normative runtime contract.
 
 ## Conformance And Release
 

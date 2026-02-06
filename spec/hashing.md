@@ -7,6 +7,7 @@ This document defines deterministic hash and signature preimages for Inactu v0.
 - Hash function: SHA-256
 - Digest text format: `sha256:<64 lowercase hex chars>`
 - Canonical JSON: RFC 8785 (JCS), UTF-8 encoded bytes
+- Registry transport checksum format: `md5` field uses `<32 lowercase hex chars>`
 
 ## Artifact Hash
 
@@ -41,11 +42,19 @@ policy schema. Policy examples are not authoritative for field ordering.
 ```json
 {
   "timestamp": <u64>,
-  "entries": { ... }
+  "entries": {
+    "<name>": {
+      "sha256": "sha256:...",
+      "md5": "<32 lowercase hex chars>"
+    }
+  }
 }
 ```
 
 `snapshot_hash` must not be included in its own preimage.
+
+`entries.<name>.md5` is for transport integrity checks and does not replace
+artifact identity authority (`sha256`).
 
 ## Execution Receipt Hash
 
@@ -63,6 +72,36 @@ policy schema. Policy examples are not authoritative for field ordering.
 ```
 
 `receipt_hash` must not be included in its own preimage.
+
+## Execution Receipt v1 Draft Hash
+
+For `spec/execution-receipt.v1.experimental.schema.json`, `receipt_hash` is:
+
+`receipt_hash = sha256(JCS(v1_receipt_payload_without_receipt_hash))`
+
+The preimage includes all v1 receipt fields except `receipt_hash`, including:
+- `bundle_hash`
+- `runtime_version_digest`
+- `result_digest`
+- `timestamp_strategy`
+
+## Bundle Hash (v1 Draft Component)
+
+`bundle_hash = sha256(JCS(bundle_payload))`
+
+`bundle_payload` is:
+```json
+{
+  "artifact": "sha256:...",
+  "manifest_hash": "sha256:...",
+  "signatures_hash": "sha256:..."
+}
+```
+
+Where:
+- `artifact` is `manifest.artifact`
+- `manifest_hash` is canonical manifest hash
+- `signatures_hash` is `sha256(JCS(signatures_object))`
 
 ## Signature Payload
 

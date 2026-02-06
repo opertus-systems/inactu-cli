@@ -9,7 +9,10 @@ use common::{
     write,
 };
 use ed25519_dalek::SigningKey;
-use inactu_verifier::{parse_receipt_json, sha256_prefixed, verify_receipt_hash};
+use inactu_verifier::{
+    parse_receipt_json, parse_receipt_v1_draft_json, sha256_prefixed, verify_receipt_hash,
+    verify_receipt_v1_draft_hash,
+};
 
 #[test]
 fn run_emits_valid_receipt_after_verification_and_policy_check() {
@@ -338,6 +341,174 @@ fn run_stops_memory_growth_abuse() {
         "stderr was: {stderr}"
     );
     assert!(!receipt_path.exists(), "receipt should not exist on trap");
+}
+
+#[test]
+fn run_emits_v1_draft_receipt_with_security_digests() {
+    let root = temp_dir("run_v1_draft_ok");
+    let wasm_path = root.join("input.wasm");
+    let manifest_path = root.join("input.manifest.json");
+    let bundle_dir = root.join("bundle");
+    let secret_key_path = root.join("signing.key");
+    let keys_path = root.join("public-keys.json");
+    let policy_path = root.join("policy.json");
+    let input_path = root.join("input.json");
+    let receipt_path = root.join("receipt-v1.json");
+
+    let wasm = wasm_with_i32_entrypoint("run", 42);
+    write(&wasm_path, &wasm);
+    let artifact = sha256_prefixed(&wasm);
+    let manifest = format!(
+        "{{\"name\":\"echo.minimal\",\"version\":\"0.1.0\",\"entrypoint\":\"run\",\"artifact\":\"{artifact}\",\"capabilities\":[],\"signers\":[\"alice.dev\"]}}"
+    );
+    write(&manifest_path, manifest.as_bytes());
+
+    let pack = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["pack", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--wasm"])
+        .arg(&wasm_path)
+        .args(["--manifest"])
+        .arg(&manifest_path)
+        .output()
+        .expect("pack should run");
+    assert!(pack.status.success(), "{:?}", pack);
+
+    let signing_key = SigningKey::from_bytes(&[25u8; 32]);
+    write(
+        &secret_key_path,
+        STANDARD.encode(signing_key.to_bytes()).as_bytes(),
+    );
+    let sign = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["sign", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--signer", "alice.dev", "--secret-key"])
+        .arg(&secret_key_path)
+        .output()
+        .expect("sign should run");
+    assert!(sign.status.success(), "{:?}", sign);
+
+    let keys = format!(
+        "{{\"alice.dev\":\"{}\"}}",
+        STANDARD.encode(signing_key.verifying_key().to_bytes())
+    );
+    write(&keys_path, keys.as_bytes());
+    let policy = r#"{
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {
+        "exec": false,
+        "time": false
+      }
+    }"#;
+    write(&policy_path, policy.as_bytes());
+    write(&input_path, br#"{}"#);
+
+    let run = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["run", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--keys"])
+        .arg(&keys_path)
+        .args(["--policy"])
+        .arg(&policy_path)
+        .args(["--input"])
+        .arg(&input_path)
+        .args(["--receipt"])
+        .arg(&receipt_path)
+        .args(["--receipt-format", "v1-draft", "--allow-experimental"])
+        .output()
+        .expect("run should run");
+    assert!(run.status.success(), "{:?}", run);
+
+    let receipt_raw = fs::read(&receipt_path).expect("receipt should exist");
+    let receipt = parse_receipt_v1_draft_json(&receipt_raw).expect("receipt should parse");
+    verify_receipt_v1_draft_hash(&receipt).expect("receipt hash should verify");
+    assert_eq!(receipt.schema_version, "1.0.0-draft");
+    assert_eq!(receipt.timestamp_strategy, "local_untrusted_unix_seconds");
+    assert_eq!(receipt.artifact, artifact);
+}
+
+#[test]
+fn run_rejects_v1_draft_receipt_without_allow_experimental() {
+    let root = temp_dir("run_v1_draft_gate");
+    let wasm_path = root.join("input.wasm");
+    let manifest_path = root.join("input.manifest.json");
+    let bundle_dir = root.join("bundle");
+    let secret_key_path = root.join("signing.key");
+    let keys_path = root.join("public-keys.json");
+    let policy_path = root.join("policy.json");
+    let input_path = root.join("input.json");
+    let receipt_path = root.join("receipt-v1.json");
+
+    let wasm = wasm_with_i32_entrypoint("run", 1);
+    write(&wasm_path, &wasm);
+    let artifact = sha256_prefixed(&wasm);
+    let manifest = format!(
+        "{{\"name\":\"echo.minimal\",\"version\":\"0.1.0\",\"entrypoint\":\"run\",\"artifact\":\"{artifact}\",\"capabilities\":[],\"signers\":[\"alice.dev\"]}}"
+    );
+    write(&manifest_path, manifest.as_bytes());
+
+    let pack = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["pack", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--wasm"])
+        .arg(&wasm_path)
+        .args(["--manifest"])
+        .arg(&manifest_path)
+        .output()
+        .expect("pack should run");
+    assert!(pack.status.success(), "{:?}", pack);
+
+    let signing_key = SigningKey::from_bytes(&[26u8; 32]);
+    write(
+        &secret_key_path,
+        STANDARD.encode(signing_key.to_bytes()).as_bytes(),
+    );
+    let sign = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["sign", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--signer", "alice.dev", "--secret-key"])
+        .arg(&secret_key_path)
+        .output()
+        .expect("sign should run");
+    assert!(sign.status.success(), "{:?}", sign);
+
+    let keys = format!(
+        "{{\"alice.dev\":\"{}\"}}",
+        STANDARD.encode(signing_key.verifying_key().to_bytes())
+    );
+    write(&keys_path, keys.as_bytes());
+    let policy = r#"{
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {
+        "exec": false,
+        "time": false
+      }
+    }"#;
+    write(&policy_path, policy.as_bytes());
+    write(&input_path, br#"{}"#);
+
+    let run = Command::new(env!("CARGO_BIN_EXE_inactu-cli"))
+        .args(["run", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--keys"])
+        .arg(&keys_path)
+        .args(["--policy"])
+        .arg(&policy_path)
+        .args(["--input"])
+        .arg(&input_path)
+        .args(["--receipt"])
+        .arg(&receipt_path)
+        .args(["--receipt-format", "v1-draft"])
+        .output()
+        .expect("run should run");
+    assert!(!run.status.success(), "{:?}", run);
+    let stderr = String::from_utf8(run.stderr).expect("stderr should be utf8");
+    assert!(
+        stderr.contains("requires --allow-experimental"),
+        "stderr was: {stderr}"
+    );
 }
 
 #[test]

@@ -15,16 +15,25 @@ This keeps security-critical checks centralized and reused by both `verify` and
 
 ## Commands
 
-- `verify --bundle <bundle-dir> --keys <public-keys.json> [--keys-digest <sha256:...>]`
-- `inspect --bundle <bundle-dir>`
-- `pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json>`
-- `sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file>`
-- `run --bundle <bundle-dir> --keys <public-keys.json> [--keys-digest <sha256:...>] --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json>`
+- `verify --bundle <bundle-dir> --keys <public-keys.json> [--keys-digest <sha256:...>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]`
+- `inspect --bundle <bundle-dir> [--allow-experimental]`
+- `pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]`
+- `sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]`
+- `run --bundle <bundle-dir> --keys <public-keys.json> [--keys-digest <sha256:...>] --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]`
 - `verify-receipt --receipt <receipt.json>`
+- `verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>`
+- `experimental-validate-manifest-v1 --manifest <manifest.json>`
+- `experimental-validate-receipt-v1 --receipt <receipt.json>`
 
 Success output contract:
 - command success lines start with `OK <command> ...` for stable log parsing
 - `inspect` intentionally emits only deterministic field lines
+
+Experimental schema gate:
+- manifests with `schema_version: "1.0.0-draft"` are rejected unless
+  `--allow-experimental` is explicitly passed
+- gate failure message is deterministic:
+  `manifest schema_version '1.0.0-draft' requires --allow-experimental`
 
 Recommended for untrusted environments:
 - always pass `--keys-digest` on `verify` and `run`
@@ -38,15 +47,20 @@ Recommended for untrusted environments:
 - `skill.wasm` hash matches `manifest.artifact`
 - Ed25519 signatures over `signatures.manifest_hash` using supplied public keys
 - optional trust-anchor pin: `sha256(public-keys.json)` matches `--keys-digest`
+- optional OCI signature check: when `--require-cosign` is set, `cosign verify <oci-ref>` must succeed
 - bounded input sizes for untrusted files (`skill.wasm`, JSON metadata, key file)
 
 `inspect` prints deterministic bundle metadata for review and does not execute
 skills.
+When `bundle-meta.json` exists, `inspect` prints deterministic metadata lines for
+its schema/artifact/manifest hash.
 
 `pack` creates/overwrites the bundle directory with:
 - `skill.wasm` copied from `--wasm`
 - `manifest.json` normalized from `--manifest`
 - `signatures.json` initialized with matching `artifact`, `manifest_hash`, and empty signatures
+- `bundle-meta.json` initialized with deterministic `schema_version`, `artifact`,
+  and `manifest_hash`
 
 `pack` requires `manifest.artifact` to match the SHA-256 digest of the supplied
 WASM bytes.
@@ -65,14 +79,34 @@ byte Ed25519 secret key seed.
 - capability ceiling evaluation
 - fuel-metered and resource-limited WASM entrypoint execution (`manifest.entrypoint`)
 - receipt emission to `--receipt`
+- receipt format defaults to `v0`; `--receipt-format v1-draft` emits draft v1
+  receipt fields including `bundle_hash`, `policy_hash`,
+  `runtime_version_digest`, and `result_digest`
 - optional trust-anchor pin: `sha256(public-keys.json)` matches `--keys-digest`
+- optional OCI signature check: when `--require-cosign` is set, `cosign verify <oci-ref>` must succeed before execution
 - bounded file sizes for policy/input/receipt parsing and bundle metadata
 
 Current execution support covers entrypoints with signatures:
 - `() -> i32` (output bytes are decimal UTF-8 of the return value)
 - `() -> ()` (output bytes are empty)
 
-`verify-receipt` validates receipt schema shape and `receipt_hash` integrity.
+`verify-receipt` validates v0 or v1-draft receipt schema shape and `receipt_hash`
+integrity.
+Receipt invariants expected by the golden flow:
+- `receipt.artifact` equals `manifest.artifact`
+- `receipt_hash` verifies from payload fields (excluding `receipt_hash`)
+- `caps_used` is deterministic for a fixed manifest/policy/input set
+
+`verify-registry-entry` validates downloaded artifact bytes against registry
+entry digests:
+- `md5` transport checksum must match exactly
+- `sha256` artifact identity digest must match exactly
+
+Experimental validation commands:
+- `experimental-validate-manifest-v1` validates full draft v1 manifest shape
+  and field constraints.
+- `experimental-validate-receipt-v1` validates full draft v1 receipt shape and
+  field constraints.
 
 ## Secure End-To-End Example
 

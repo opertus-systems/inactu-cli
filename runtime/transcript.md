@@ -18,6 +18,9 @@ Rules:
 - Receipt schema: `spec/execution-receipt.schema.json`.
 - Exact `receipt_hash` preimage is defined in `spec/hashing.md`.
 - `receipt_hash` MUST be computed over the payload that excludes `receipt_hash`.
+- `timestamp` is host-observed UNIX seconds; it is not external time attestation.
+- Successful runs must emit a receipt artifact; failed runs must not emit a
+  success receipt.
 - `outputs_hash` is computed from execution output bytes:
   - for `() -> i32` entrypoints, output bytes are decimal UTF-8 of the return value
   - for `() -> ()` entrypoints, output bytes are empty
