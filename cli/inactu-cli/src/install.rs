@@ -141,14 +141,14 @@ fn load_artifact(source: &str, allow_insecure_http: bool) -> Result<Vec<u8>, Str
         let response = ureq::get(source)
             .call()
             .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
-        let mut reader = response.into_reader();
+        let mut reader = response.into_body().into_reader();
         return read_limited(&mut reader, MAX_SKILL_ARCHIVE_BYTES, "artifact");
     }
     if source.starts_with("https://") {
         let response = ureq::get(source)
             .call()
             .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
-        let mut reader = response.into_reader();
+        let mut reader = response.into_body().into_reader();
         return read_limited(&mut reader, MAX_SKILL_ARCHIVE_BYTES, "artifact");
     }
     if source.starts_with("file://") {

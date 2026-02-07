@@ -382,7 +382,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             };
             let mut body = Vec::new();
             let max = out_len as usize;
-            let mut reader = response.into_reader().take(max as u64);
+            let mut reader = response.into_body().into_reader().take(max as u64);
             if reader.read_to_end(&mut body).is_err() {
                 return Ok(-1);
             }
