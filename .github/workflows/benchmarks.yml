@@ -26,7 +26,7 @@ jobs:
         run: ITERATIONS=20 ./scripts/benchmark.sh
 
       - name: Upload benchmark report
-        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: benchmark-report
           path: bench/latest.json
