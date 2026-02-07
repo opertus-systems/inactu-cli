@@ -5,7 +5,7 @@ release-coupling metadata.
 
 ## Repository Roles
 
-- `inactu`: substrate authority (pack/sign/verify/run, policy, conformance)
+- `inactu-cli`: substrate authority (pack/sign/verify/run, policy, conformance)
 - `inactu-control`: control-plane APIs and metadata services
 - `inactu-sdk`: SDK layer with parity/conformance checks
 - `inactu-skills`: signed skill bundles and lock metadata

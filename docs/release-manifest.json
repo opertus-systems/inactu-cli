@@ -3,8 +3,8 @@
   "release": "v0.2.0",
   "generated_at": "2026-02-06T23:20:00Z",
   "repos": {
-    "inactu": {
-      "repo": "https://github.com/opertus-systems/inactu",
+    "inactu-cli": {
+      "repo": "https://github.com/opertus-systems/inactu-cli",
       "commit": "9e8a46488a4690388fb430c78d08b4ca3cff4325",
       "tag": "v0.2.0"
     },
@@ -23,7 +23,7 @@
       "commit": "51264e611161a5a09784eb3953393b884c11b225",
       "tag": null,
       "compatibility": {
-        "substrate_repo": "inactu",
+        "substrate_repo": "inactu-cli",
         "substrate_commit": "9e8a46488a4690388fb430c78d08b4ca3cff4325"
       }
     }

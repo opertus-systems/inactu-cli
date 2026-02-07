@@ -1,6 +1,10 @@
-# Inactu
+# Inactu CLI — secure, policy-governed execution of declarative skill pipelines.
 
-Verifiable execution substrate for immutable skills.
+Install the inactu CLI to run skills and pipelines.
+
+Repository rename note: this repository is `inactu-cli`. If an older
+`opertus-systems/inactu` repository path still exists, keep a redirect note to
+`opertus-systems/inactu-cli`.
 
 ## About Inactu
 
@@ -38,7 +42,7 @@ Inactu is not an agent framework, workflow engine, or orchestration layer.
 ## Repository Layout
 
 ```text
-inactu/
+inactu-cli/
 ├─ spec/            # Normative specs (formats, policies, threat model)
 ├─ core/            # Verification, signing, policy libraries (Rust)
 ├─ runtime/         # Runtime execution/transcript docs
