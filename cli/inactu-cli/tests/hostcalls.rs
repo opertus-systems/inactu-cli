@@ -228,6 +228,95 @@ fn hostcalls_fs_roundtrip_receipts() {
 }
 
 #[test]
+fn hostcalls_fs_read_tree_receipt_and_caps_used() {
+    let root = temp_dir("hostcalls_fs_tree");
+    let tree_root = root.join("tree");
+    fs::create_dir_all(tree_root.join("sub")).expect("tree dir");
+    write(&tree_root.join("a.txt"), b"hello");
+    write(&tree_root.join("sub").join("b.txt"), b"world!");
+
+    let tree_wat = r#"(module
+  (import "inactu" "input_len" (func $input_len (result i32)))
+  (import "inactu" "input_read" (func $input_read (param i32 i32 i32) (result i32)))
+  (import "inactu" "fs_read_tree" (func $fs_read_tree (param i32 i32 i32 i32) (result i32)))
+  (import "inactu" "output_write" (func $output_write (param i32 i32) (result i32)))
+  (memory (export "memory") 2)
+  (func (export "run") (result i32)
+    (local $root_len i32)
+    (local $n i32)
+    call $input_len
+    local.set $root_len
+    i32.const 0
+    i32.const 0
+    local.get $root_len
+    call $input_read
+    drop
+    i32.const 0
+    local.get $root_len
+    i32.const 2048
+    i32.const 32768
+    call $fs_read_tree
+    local.set $n
+    local.get $n
+    i32.const 0
+    i32.lt_s
+    if
+      i32.const 1
+      return
+    end
+    i32.const 2048
+    local.get $n
+    call $output_write
+    drop
+    i32.const 0
+  )
+)"#;
+
+    let bundle_ctx = create_bundle(
+        &root,
+        "fs-tree",
+        tree_wat,
+        json!([{"kind":"fs.read","value":tree_root.display().to_string()}]),
+    );
+
+    let policy = json!({
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {
+        "fs": {"read": [tree_root.display().to_string()]}
+      }
+    });
+    let policy_path = root.join("policy.json");
+    write(
+        &policy_path,
+        serde_json::to_vec_pretty(&policy)
+            .expect("policy should serialize")
+            .as_slice(),
+    );
+
+    let in_path = root.join("in-root.txt");
+    write(&in_path, tree_root.display().to_string().as_bytes());
+    let receipt_path = root.join("receipt-tree.json");
+    run_bundle(&bundle_ctx, &policy_path, &in_path, &receipt_path, &[]);
+
+    let expected = json!({
+      "root": tree_root.display().to_string(),
+      "entries": [
+        {"path":"a.txt","kind":"file","bytes":5},
+        {"path":"sub","kind":"dir"},
+        {"path":"sub/b.txt","kind":"file","bytes":6}
+      ],
+      "truncated": false
+    });
+    let expected_bytes = serde_json::to_vec(&expected).expect("expected json bytes");
+
+    let receipt =
+        parse_receipt_json(&fs::read(&receipt_path).expect("receipt read")).expect("receipt parse");
+    assert_eq!(receipt.outputs_hash, sha256_prefixed(&expected_bytes));
+    assert_eq!(receipt.caps_used, vec!["fs.read".to_string()]);
+}
+
+#[test]
 fn hostcalls_kv_roundtrip_receipts() {
     let root = temp_dir("hostcalls_kv");
     let kv_dir = root.join("kv");

@@ -21,6 +21,7 @@ This keeps security-critical checks centralized and reused by both `verify` and
 - `archive --bundle <bundle-dir> --output <skill.tar.zst>`
 - `sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]`
 - `install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-experimental]`
+- `export agentskills --agent <claude|codex|cursor> --scope <user|repo|admin>`
 - `run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]`
 - `verify-receipt --receipt <receipt.json>`
 - `verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>`
@@ -100,6 +101,17 @@ byte Ed25519 secret key seed.
 - stores installed content under `~/.inactu/store/sha256/<hash>/`
   (or `$INACTU_HOME/store/sha256/<hash>/`)
 - updates local metadata index at `~/.inactu/index.json`
+
+`export agentskills` bridges installed skills into filesystem-scanned AgentSkills
+layouts while keeping execution in Inactu wrappers:
+- source of truth: installed skills from `~/.inactu/index.json`
+- generated layout per skill: `SKILL.md`, `scripts/run.sh`, `scripts/run.ps1`, `references/*`
+- supported targets:
+  - Claude: `~/.claude/skills` (user), `./.claude/skills` (repo)
+  - Codex: `~/.agents/skills` (user), `./.agents/skills` (repo), `/etc/codex/skills` (admin)
+  - Cursor: `~/.cursor/skills` (user), `./.cursor/skills` (repo)
+- wrappers call `inactu-cli run` with an exported `ide-safe` policy profile
+  (network denied, write constrained to scratch, exec/time denied)
 
 `run` is an M3 scaffold that performs pre-execution checks and emits a receipt:
 - artifact hash verification

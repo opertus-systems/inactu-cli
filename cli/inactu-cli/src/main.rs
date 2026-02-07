@@ -1,3 +1,4 @@
+mod agentskills;
 mod archive;
 mod constants;
 mod fileio;
@@ -14,6 +15,7 @@ use std::process::Command;
 use std::process::ExitCode;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+use agentskills::{export_agentskills, Agent, ExportRequest, Scope};
 use archive::create_skill_archive;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::Signer as _;
@@ -39,7 +41,7 @@ use keys::{parse_public_keys, parse_signing_key, verify_keys_digest};
 use preflight::{load_verified_bundle, read_manifest_and_signatures};
 use runtime_exec::execute_wasm;
 
-const USAGE: &str = "usage:\n  inactu-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  inactu-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  inactu-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  inactu-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  inactu-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-insecure-http] [--allow-experimental]\n  inactu-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli verify-receipt --receipt <receipt.json>\n  inactu-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  inactu-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  inactu-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
+const USAGE: &str = "usage:\n  inactu-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  inactu-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  inactu-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  inactu-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  inactu-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-insecure-http] [--allow-experimental]\n  inactu-cli export agentskills --agent <claude|codex|cursor> --scope <user|repo|admin>\n  inactu-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  inactu-cli verify-receipt --receipt <receipt.json>\n  inactu-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  inactu-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  inactu-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
 const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
 const BUNDLE_META_SCHEMA_VERSION: &str = "1.0.0";
 const RECEIPT_TIMESTAMP_STRATEGY_LOCAL: &str = "local_untrusted_unix_seconds";
@@ -78,6 +80,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         Some("archive") => run_archive(&args[1..]),
         Some("sign") => run_sign(&args[1..]),
         Some("install") => run_install(&args[1..]),
+        Some("export") => run_export(&args[1..]),
         Some("run") => run_execute(&args[1..]),
         Some("verify-receipt") => run_verify_receipt_cmd(&args[1..]),
         Some("verify-registry-entry") => run_verify_registry_entry_cmd(&args[1..]),
@@ -106,6 +109,21 @@ fn run(args: Vec<String>) -> Result<(), String> {
         ),
     }
     result
+}
+
+fn run_export(args: &[String]) -> Result<(), String> {
+    let Some(subcommand) = args.first().map(String::as_str) else {
+        return Err(USAGE.to_string());
+    };
+    if subcommand != "agentskills" {
+        return Err(USAGE.to_string());
+    }
+    let parsed = parse_flags(&args[1..], &["--agent", "--scope"], USAGE)?;
+    let agent = Agent::parse(&required_string(&parsed, "--agent", USAGE)?)?;
+    let scope = Scope::parse(&required_string(&parsed, "--scope", USAGE)?)?;
+    let line = export_agentskills(ExportRequest { agent, scope })?;
+    println!("{line}");
+    Ok(())
 }
 
 fn run_verify(args: &[String]) -> Result<(), String> {
