@@ -727,10 +727,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "inactu"
-version = "0.2.0"
-
-[[package]]
 name = "inactu-cli"
 version = "0.2.0"
 dependencies = [
@@ -750,6 +746,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "inactu-host"
+version = "0.2.0"
+
+[[package]]
 name = "inactu-verifier"
 version = "0.2.0"
 dependencies = [
@@ -761,7 +761,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "url",
 ]
 
