@@ -11,8 +11,8 @@ Goal:
 - Deterministically validate bundle integrity and signatures.
 
 Work:
-- `inactu-cli verify --bundle <dir> --keys <public-keys.json> --keys-digest <sha256:...>`
-- `inactu-cli inspect --bundle <dir>`
+- `provenact-cli verify --bundle <dir> --keys <public-keys.json> --keys-digest <sha256:...>`
+- `provenact-cli inspect --bundle <dir>`
 - Strict parsing of manifest/signature data and digest format checks.
 
 Acceptance criteria:
@@ -32,16 +32,16 @@ Goal:
 - Produce deterministic bundle artifacts and signature records from local inputs.
 
 Work:
-- Add `inactu-cli pack` to assemble:
+- Add `provenact-cli pack` to assemble:
   - `skill.wasm`
   - `manifest.json`
   - `signatures.json` (initially empty or unsigned scaffold)
-- Add `inactu-cli sign` to append/update `signatures.json` with Ed25519 signatures over `signatures.manifest_hash` (canonical manifest hash).
+- Add `provenact-cli sign` to append/update `signatures.json` with Ed25519 signatures over `signatures.manifest_hash` (canonical manifest hash).
 - Keep hash/signature preimages aligned with `spec/hashing.md`.
 
 Acceptance criteria:
 - Packing identical inputs produces byte-stable JSON and identical artifact digest.
-- Signed output verifies using `inactu-cli verify`.
+- Signed output verifies using `provenact-cli verify`.
 - New generated vectors are added under:
   - `test-vectors/good/pack-sign-roundtrip`
   - `test-vectors/bad/` (at least one malformed signing case)
@@ -55,7 +55,7 @@ Goal:
 - Execute verified skills with deny-by-default capability enforcement and emit receipts.
 
 Work:
-- Add `inactu-cli run`.
+- Add `provenact-cli run`.
 - Enforce verification sequence before execution:
   1. artifact hash
   2. signatures

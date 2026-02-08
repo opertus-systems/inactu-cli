@@ -1,5 +1,5 @@
 [package]
-name = "inactu-host"
+name = "provenact-host"
 version = "0.2.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -12,6 +12,6 @@ path = "src/lib.rs"
 members = [
   ".",
   "core/verifier",
-  "cli/inactu-cli"
+  "cli/provenact-cli"
 ]
 resolver = "2"

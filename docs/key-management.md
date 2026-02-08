@@ -1,7 +1,7 @@
 # Key Management (Rotation and Revocation)
 
 This runbook defines operator procedures for trust-anchor key lifecycle in
-Inactu.
+Provenact.
 
 Scope:
 - trust anchor file: `public-keys.json`
@@ -31,7 +31,7 @@ Use this for planned signer key replacement.
 4. Re-sign artifacts.
 - Sign new bundle outputs with the rotated key.
 - Verify with:
-  `inactu-cli verify --bundle <bundle> --keys ./public-keys.json --keys-digest "$NEW_KEYS_DIGEST"`.
+  `provenact-cli verify --bundle <bundle> --keys ./public-keys.json --keys-digest "$NEW_KEYS_DIGEST"`.
 
 5. Rollout and observe.
 - Deploy trust-anchor update and digest pin atomically where possible.

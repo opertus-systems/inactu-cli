@@ -1,6 +1,6 @@
 # Compatibility and Stability Policy (v0)
 
-This document defines compatibility guarantees for Inactu v0.
+This document defines compatibility guarantees for Provenact v0.
 
 ## Scope
 
@@ -16,7 +16,7 @@ The following are explicitly excluded from compatibility guarantees:
 
 ## Versioning Contract
 
-- Inactu follows semantic versioning for stable contracts.
+- Provenact follows semantic versioning for stable contracts.
 - Patch releases (`0.1.x`) may tighten validation and fix bugs without changing
   accepted valid payload semantics.
 - Minor releases (`0.x+1.0`) may add optional fields/behaviors that preserve
@@ -36,7 +36,7 @@ The following are explicitly excluded from compatibility guarantees:
 
 ## Runtime Profile Compatibility
 
-- v0 execution contract is WebAssembly module execution with the Inactu host ABI
+- v0 execution contract is WebAssembly module execution with the Provenact host ABI
   (`docs/runtime-host-abi.md`).
 - WASI support is not normative in v0; skills relying on WASI imports are out of
   contract unless and until a future profile declares them.

@@ -17,7 +17,7 @@ Out of scope:
 
 ## Repository Boundaries
 
-1. Keep `inactu` as the substrate authority:
+1. Keep `provenact` as the substrate authority:
 - packaging
 - signing
 - verification
@@ -55,8 +55,8 @@ Out of scope:
 
 ## Immediate Work Started
 
-- `inactu-cli verify` now requires `--keys-digest`.
-- `inactu-cli run` now requires `--keys-digest`.
+- `provenact-cli verify` now requires `--keys-digest`.
+- `provenact-cli run` now requires `--keys-digest`.
 - CLI integration tests now pin trust-anchor digests by default and include
   missing-digest denial coverage.
 - Operator rotation/revocation runbook added:

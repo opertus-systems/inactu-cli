@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use inactu_verifier::{
+use provenact_verifier::{
     compute_event_hash_v0, parse_pipeline_v0_json, parse_skill_manifest_v0_json,
     resolve_effective_caps_v0, verify_event_chain_v0, CapGrantV0, CapabilityRequestV0,
     EventRecordV0,

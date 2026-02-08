@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Inactu Pipeline DAG v0",
+  "title": "Provenact Pipeline DAG v0",
   "type": "object",
   "required": ["schema_version", "pipeline_id", "nodes", "edges"],
   "additionalProperties": false,

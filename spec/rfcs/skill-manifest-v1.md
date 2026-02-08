@@ -1,7 +1,7 @@
 # RFC: Skill Manifest v1 (Draft)
 
 Status: Draft  
-Owner: Inactu Maintainers  
+Owner: Provenact Maintainers  
 Last Updated: 2026-02-06
 
 This RFC is non-normative until promoted into `SPEC.md`.
@@ -9,7 +9,7 @@ This RFC is non-normative until promoted into `SPEC.md`.
 ## 1. Summary
 
 Define a versioned, portable `manifest.json` contract that enables cross-agent
-skill interoperability while preserving Inactu verification and policy controls.
+skill interoperability while preserving Provenact verification and policy controls.
 
 ## 2. Motivation
 

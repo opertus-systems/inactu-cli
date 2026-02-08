@@ -1441,7 +1441,7 @@ mod tests {
             },
         };
         let runtime = RuntimeV1Draft {
-            name: "inactu-cli".to_string(),
+            name: "provenact-cli".to_string(),
             version: "0.1.0".to_string(),
             profile: Some("wasmtime36-hostabi-v0".to_string()),
         };

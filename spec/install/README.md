@@ -5,13 +5,13 @@ behavior and test coverage.
 
 ## Writer Authority
 
-Install metadata is written by `inactu-cli` install flow in:
+Install metadata is written by `provenact-cli` install flow in:
 
-- `cli/inactu-cli/src/install.rs`
+- `cli/provenact-cli/src/install.rs`
 
 Canonical archive bytes are written by:
 
-- `cli/inactu-cli/src/archive.rs`
+- `cli/provenact-cli/src/archive.rs`
 
 Primary write points:
 
@@ -30,7 +30,7 @@ Field mapping:
 - `skill`
   - writer: archive digest (`sha256:<hash>`) computed from raw `skill.tar.zst`
 - `source`
-  - writer: exact install source string passed to `inactu-cli install --artifact`
+  - writer: exact install source string passed to `provenact-cli install --artifact`
 - `manifest_name`
   - writer: parsed from `manifest.json` (`manifest.name`)
 - `manifest_version`
@@ -77,7 +77,7 @@ Per-entry mapping:
 
 Install behavior and schema-shape assertions are covered by:
 
-- `cli/inactu-cli/tests/install.rs`
+- `cli/provenact-cli/tests/install.rs`
 
 Key tests:
 

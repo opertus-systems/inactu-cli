@@ -52,9 +52,9 @@ This directory contains deterministic conformance vectors for v0.
 - `bad/bad-signature/`:
   - artifact hash matches, signature is invalid.
 - `bad/sign-invalid-secret-key/`:
-  - malformed signing key input for `inactu-cli sign`.
+  - malformed signing key input for `provenact-cli sign`.
 
-Each bundle vector includes `public-keys.json` for `inactu-cli verify`.
+Each bundle vector includes `public-keys.json` for `provenact-cli verify`.
 
 ## Receipt Vectors
 

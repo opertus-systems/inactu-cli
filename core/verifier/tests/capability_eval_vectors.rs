@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use inactu_verifier::{enforce_capability_ceiling, Capability, Policy};
+use provenact_verifier::{enforce_capability_ceiling, Capability, Policy};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

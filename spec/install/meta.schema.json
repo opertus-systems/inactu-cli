@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://inactu.dev/spec/install/meta.schema.json",
-  "title": "Inactu Installed Skill Metadata v1",
+  "$id": "https://provenact.dev/spec/install/meta.schema.json",
+  "title": "Provenact Installed Skill Metadata v1",
   "type": "object",
   "additionalProperties": false,
   "required": [

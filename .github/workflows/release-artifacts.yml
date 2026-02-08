@@ -5,9 +5,6 @@ on:
     types:
       - published
 
-permissions:
-  contents: read
-
 jobs:
   build-and-attach:
     runs-on: ubuntu-latest
@@ -15,7 +12,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7
@@ -23,7 +20,7 @@ jobs:
           targets: aarch64-unknown-linux-gnu
 
       - name: Cache Cargo
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
+        uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db
 
       - name: Install arm64 cross toolchain
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
@@ -32,14 +29,14 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: |
-          cargo build --release -p inactu-cli --locked
-          cargo build --release -p inactu-cli --locked --target aarch64-unknown-linux-gnu
+          cargo build --release -p provenact-cli --locked
+          cargo build --release -p provenact-cli --locked --target aarch64-unknown-linux-gnu
 
       - name: Package artifacts
         run: |
           mkdir -p dist
-          tar -C target/release -czf dist/inactu-cli-linux-x86_64.tar.gz inactu-cli
-          tar -C target/aarch64-unknown-linux-gnu/release -czf dist/inactu-cli-linux-arm64.tar.gz inactu-cli
+          tar -C target/release -czf dist/provenact-cli-linux-x86_64.tar.gz provenact-cli
+          tar -C target/aarch64-unknown-linux-gnu/release -czf dist/provenact-cli-linux-arm64.tar.gz provenact-cli
           sha256sum dist/*.tar.gz > dist/SHA256SUMS
 
       - name: Install Syft

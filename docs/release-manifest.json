@@ -3,27 +3,27 @@
   "release": "v0.2.0",
   "generated_at": "2026-02-06T23:20:00Z",
   "repos": {
-    "inactu-cli": {
-      "repo": "https://github.com/opertus-systems/inactu-cli",
+    "provenact-cli": {
+      "repo": "https://github.com/opertus-systems/provenact-cli",
       "commit": "9e8a46488a4690388fb430c78d08b4ca3cff4325",
       "tag": "v0.2.0"
     },
-    "inactu-control": {
-      "repo": "https://github.com/opertus-systems/inactu-control",
+    "provenact-control": {
+      "repo": "https://github.com/opertus-systems/provenact-control",
       "commit": "3aeffd768e53835c82ccd22a4049b092198c462d",
       "tag": null
     },
-    "inactu-sdk": {
-      "repo": "https://github.com/opertus-systems/inactu-sdk",
+    "provenact-sdk": {
+      "repo": "https://github.com/opertus-systems/provenact-sdk",
       "commit": "7ae7ee7a2d122bf9931e73899e6151a0ae56ab45",
       "tag": null
     },
-    "inactu-skills": {
-      "repo": "https://github.com/opertus-systems/inactu-skills",
+    "provenact-skills": {
+      "repo": "https://github.com/opertus-systems/provenact-skills",
       "commit": "51264e611161a5a09784eb3953393b884c11b225",
       "tag": null,
       "compatibility": {
-        "substrate_repo": "inactu-cli",
+        "substrate_repo": "provenact-cli",
         "substrate_commit": "9e8a46488a4690388fb430c78d08b4ca3cff4325"
       }
     }

@@ -2,12 +2,12 @@
 
 Status: experimental. This ABI can change before v1 freeze.
 
-This document describes the host imports exposed by `inactu-cli run`.
+This document describes the host imports exposed by `provenact-cli run`.
 
-Module name: `inactu`
+Module name: `provenact`
 
 v0 runtime profile note:
-- Skills are expected to target the Inactu host ABI in this document.
+- Skills are expected to target the Provenact host ABI in this document.
 - WASI imports are not part of the v0 normative execution profile.
 
 ## Imports
@@ -92,5 +92,5 @@ v0 runtime profile note:
 ## Local Runtime Storage
 
 Defaults (works on macOS and Linux):
-- KV root directory: `/tmp/inactu-kv` (override with `INACTU_KV_DIR`)
-- Queue root directory: `/tmp/inactu-queue` (override with `INACTU_QUEUE_DIR`)
+- KV root directory: `/tmp/provenact-kv` (override with `PROVENACT_KV_DIR`)
+- Queue root directory: `/tmp/provenact-queue` (override with `PROVENACT_QUEUE_DIR`)

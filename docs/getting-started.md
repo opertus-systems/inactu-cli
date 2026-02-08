@@ -1,10 +1,10 @@
 # Getting Started (Secure v0.1 Flow)
 
-This guide shows the recommended signed execution flow for Inactu v0.
+This guide shows the recommended signed execution flow for Provenact v0.
 
 Prereqs:
 - Rust toolchain installed
-- Build the CLI once: `cargo build -p inactu-cli`
+- Build the CLI once: `cargo build -p provenact-cli`
 - Optional (for cosign-gated verify/run): `cosign` installed locally
 
 Recommended local bootstrap:
@@ -26,7 +26,7 @@ You need:
 ## 2) Pack Bundle
 
 ```bash
-cargo run -p inactu-cli -- pack \
+cargo run -p provenact-cli -- pack \
   --bundle ./bundle \
   --wasm ./skill.wasm \
   --manifest ./manifest.json
@@ -35,7 +35,7 @@ cargo run -p inactu-cli -- pack \
 ## 3) Sign Bundle
 
 ```bash
-cargo run -p inactu-cli -- sign \
+cargo run -p provenact-cli -- sign \
   --bundle ./bundle \
   --signer alice.dev \
   --secret-key ./alice.key
@@ -50,7 +50,7 @@ KEYS_DIGEST="$(shasum -a 256 ./public-keys.json | awk '{print "sha256:"$1}')"
 ## 5) Verify Bundle
 
 ```bash
-cargo run -p inactu-cli -- verify \
+cargo run -p provenact-cli -- verify \
   --bundle ./bundle \
   --keys ./public-keys.json \
   --keys-digest "$KEYS_DIGEST"
@@ -59,7 +59,7 @@ cargo run -p inactu-cli -- verify \
 Optional cosign-gated verify:
 
 ```bash
-cargo run -p inactu-cli -- verify \
+cargo run -p provenact-cli -- verify \
   --bundle ./bundle \
   --keys ./public-keys.json \
   --keys-digest "$KEYS_DIGEST" \
@@ -70,7 +70,7 @@ cargo run -p inactu-cli -- verify \
 ## 6) Run with Policy
 
 ```bash
-cargo run -p inactu-cli -- run \
+cargo run -p provenact-cli -- run \
   --bundle ./bundle \
   --keys ./public-keys.json \
   --keys-digest "$KEYS_DIGEST" \
@@ -82,7 +82,7 @@ cargo run -p inactu-cli -- run \
 Optional cosign-gated run:
 
 ```bash
-cargo run -p inactu-cli -- run \
+cargo run -p provenact-cli -- run \
   --bundle ./bundle \
   --keys ./public-keys.json \
   --keys-digest "$KEYS_DIGEST" \
@@ -96,7 +96,7 @@ cargo run -p inactu-cli -- run \
 ## 7) Verify Receipt
 
 ```bash
-cargo run -p inactu-cli -- verify-receipt --receipt ./receipt.json
+cargo run -p provenact-cli -- verify-receipt --receipt ./receipt.json
 ```
 
 ## Notes

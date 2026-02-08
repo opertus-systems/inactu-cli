@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-CLI := cargo run -p inactu-cli --
+CLI := cargo run -p provenact-cli --
 BUNDLE ?= ./bundle
 WASM ?= ./skill.wasm
 MANIFEST ?= ./manifest.json
@@ -17,8 +17,8 @@ OCI_REF ?=
 help:
 	@echo "targets:"
 	@echo "  bootstrap       - check local tools and build CLI"
-	@echo "  build           - build inactu-cli"
-	@echo "  test            - run inactu-cli tests"
+	@echo "  build           - build provenact-cli"
+	@echo "  test            - run provenact-cli tests"
 	@echo "  conformance     - run full conformance"
 	@echo "  pack            - pack bundle"
 	@echo "  sign            - sign bundle"
@@ -36,10 +36,10 @@ bootstrap:
 	./scripts/bootstrap-local.sh
 
 build:
-	cargo build -p inactu-cli
+	cargo build -p provenact-cli
 
 test:
-	cargo test -p inactu-cli
+	cargo test -p provenact-cli
 
 conformance:
 	cargo conformance
@@ -82,4 +82,4 @@ flow: pack sign verify run verify-receipt
 flow-cosign: pack sign verify-cosign run-cosign verify-receipt
 
 demo-v0:
-	./apps/inactu-agent-kit/scripts/demo-v0.sh
+	./apps/provenact-agent-kit/scripts/demo-v0.sh

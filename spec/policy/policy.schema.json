@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Inactu Policy (v0)",
+  "title": "Provenact Policy (v0)",
   "type": "object",
   "required": [
     "version",

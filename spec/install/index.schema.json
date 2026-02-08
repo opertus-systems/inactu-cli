@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://inactu.dev/spec/install/index.schema.json",
-  "title": "Inactu Install Index v1",
+  "$id": "https://provenact.dev/spec/install/index.schema.json",
+  "title": "Provenact Install Index v1",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -1,6 +1,6 @@
-# inactu-verifier
+# provenact-verifier
 
-Deterministic verification helpers for Inactu v0.
+Deterministic verification helpers for Provenact v0.
 
 Current scope:
 - bundled schema exports:

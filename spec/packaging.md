@@ -1,6 +1,6 @@
 # Skill Packaging Specification (v0)
 
-This document defines deterministic skill bundle packaging for Inactu v0.
+This document defines deterministic skill bundle packaging for Provenact v0.
 
 ## Logical Bundle
 

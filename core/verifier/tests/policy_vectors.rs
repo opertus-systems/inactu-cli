@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use inactu_verifier::parse_policy_document;
+use provenact_verifier::parse_policy_document;
 
 fn vectors_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0-draft",
-  "id": "inactu.echo.minimal",
+  "id": "provenact.echo.minimal",
   "name": "echo.minimal",
   "version": "0.1.0",
   "entrypoint": "run",
@@ -34,7 +34,7 @@
   ],
   "compatibility": {
     "runtime_profiles": [
-      "inactu-runtime/v1"
+      "provenact-runtime/v1"
     ],
     "adapter_profiles": [
       "none"

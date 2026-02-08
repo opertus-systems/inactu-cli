@@ -1,3 +1,3 @@
 [alias]
-conformance = "test -p inactu-verifier -p inactu-cli"
-release-v0-check = "test -p inactu-verifier -p inactu-cli"
+conformance = "test -p provenact-verifier -p provenact-cli"
+release-v0-check = "test -p provenact-verifier -p provenact-cli"

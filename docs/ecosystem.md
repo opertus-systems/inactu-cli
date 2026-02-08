@@ -1,14 +1,14 @@
 # Ecosystem Map
 
-This document defines repository roles for the Inactu ecosystem and points to
+This document defines repository roles for the Provenact ecosystem and points to
 release-coupling metadata.
 
 ## Repository Roles
 
-- `inactu-cli`: substrate authority (pack/sign/verify/run, policy, conformance)
-- `inactu-control`: control-plane APIs and metadata services
-- `inactu-sdk`: SDK layer with parity/conformance checks
-- `inactu-skills`: signed skill bundles and lock metadata
+- `provenact-cli`: substrate authority (pack/sign/verify/run, policy, conformance)
+- `provenact-control`: control-plane APIs and metadata services
+- `provenact-sdk`: SDK layer with parity/conformance checks
+- `provenact-skills`: signed skill bundles and lock metadata
 
 ## Release Coupling
 

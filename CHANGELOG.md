@@ -56,7 +56,7 @@ Versioning.
 ## [0.1.0] - 2026-02-06
 
 ### Added
-- Initial public release of Inactu v0 substrate with:
+- Initial public release of Provenact v0 substrate with:
   - bundle packing/signing/verification/inspection/runtime execution
   - verifier core with policy and capability enforcement
   - deterministic execution receipts and verification

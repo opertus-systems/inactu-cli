@@ -1,7 +1,0 @@
-{
-  "framework": "manual-tool-caller",
-  "tool": "inactu.execute_skill",
-  "arguments": {
-    "fixture": "echo-v0"
-  }
-}

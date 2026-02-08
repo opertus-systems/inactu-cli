@@ -22,7 +22,7 @@
     "code": "ok"
   },
   "runtime": {
-    "name": "inactu-runtime",
+    "name": "provenact-runtime",
     "version": "0.1.0",
     "profile": "v1-draft"
   },

@@ -1,7 +1,7 @@
 # RFC: Execution Receipt v1 (Draft)
 
 Status: Draft  
-Owner: Inactu Maintainers  
+Owner: Provenact Maintainers  
 Last Updated: 2026-02-06
 
 This RFC is non-normative until promoted into `SPEC.md`.
@@ -9,7 +9,7 @@ This RFC is non-normative until promoted into `SPEC.md`.
 ## 1. Summary
 
 Define `Execution Receipt v1` as a portable, deterministic receipt contract for
-cross-environment verification of Inactu skill runs.
+cross-environment verification of Provenact skill runs.
 
 ## 2. Motivation
 

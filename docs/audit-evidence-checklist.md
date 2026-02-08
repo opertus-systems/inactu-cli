@@ -11,7 +11,7 @@ packet. This template maps to `docs/compliance-controls.md`.
 ## 1) Build And Test Evidence
 
 - [ ] Conformance run attached (`cargo conformance`) with timestamp and run ID.
-- [ ] CLI test run attached (`cargo test -p inactu-cli`) with timestamp and run ID.
+- [ ] CLI test run attached (`cargo test -p provenact-cli`) with timestamp and run ID.
 - [ ] Security workflow results attached (`security.yml`: clippy, deny, audit).
 - [ ] Commit SHA and branch/tag provenance recorded.
 
@@ -60,7 +60,7 @@ Artifacts to include:
 
 - [ ] Sample production/staging receipts attached.
 - [ ] Receipt verification outputs attached (`verify-receipt`).
-- [ ] Telemetry extracts attached for `inactu.verify`, `inactu.run`, `inactu.verify_receipt`.
+- [ ] Telemetry extracts attached for `provenact.verify`, `provenact.run`, `provenact.verify_receipt`.
 - [ ] Failed verification/policy-deny events reviewed and dispositioned.
 
 Artifacts to include:

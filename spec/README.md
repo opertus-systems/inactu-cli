@@ -1,6 +1,6 @@
 # Spec
 
-This directory contains normative v0 definitions for Inactu.
+This directory contains normative v0 definitions for Provenact.
 
 - `v0.md` - composable skills execution contract and locked v0 decisions
 - `v0/` - v0 composable skill and pipeline schemas

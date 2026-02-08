@@ -1,6 +1,6 @@
 # Threat Model (v0)
 
-Inactu assumes hostile inputs, potentially malicious skills, and imperfect
+Provenact assumes hostile inputs, potentially malicious skills, and imperfect
 hosts. This model defines what v0 does and does not defend.
 
 ## Assets to Protect
