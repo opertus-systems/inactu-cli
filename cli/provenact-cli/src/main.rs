@@ -1004,7 +1004,8 @@ fn emit_obs(event: &str, fields: Vec<(&str, Value)>) {
 }
 
 fn verify_cosign_oci_ref(oci_ref: &str) -> Result<(), String> {
-    let output = Command::new("cosign")
+    let cosign_bin = env::var("PROVENACT_COSIGN_BIN").unwrap_or_else(|_| "cosign".to_string());
+    let output = Command::new(&cosign_bin)
         .args(["verify", oci_ref])
         .output()
         .map_err(|e| format!("cosign verify invocation failed: {e}"))?;

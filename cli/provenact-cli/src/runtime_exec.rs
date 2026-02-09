@@ -7,6 +7,8 @@ use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(unix)]
+use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 use getrandom::fill as random_fill_os;
 use provenact_verifier::{sha256_prefixed, Capability};
@@ -339,7 +341,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                     return Ok(-1);
                 }
             }
-            if fs::write(&path_norm, &bytes).is_err() {
+            if secure_write_bytes(Path::new(&path_norm), &bytes).is_err() {
                 return Ok(-1);
             }
             Ok(0)
@@ -426,7 +428,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                     return Ok(-1);
                 }
             }
-            if fs::write(path, value).is_err() {
+            if secure_write_bytes(&path, &value).is_err() {
                 return Ok(-1);
             }
             Ok(0)
@@ -501,6 +503,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                     return Ok(-1);
                 }
             }
+            if matches!(fs::symlink_metadata(&path), Ok(meta) if meta.file_type().is_symlink()) {
+                return Ok(-1);
+            }
             let encoded = STANDARD.encode(message);
             let mut file = match OpenOptions::new().create(true).append(true).open(path) {
                 Ok(f) => f,
@@ -538,6 +543,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 "queue.consume",
             )?;
             let path = queue_file_path(&topic_bytes);
+            if matches!(fs::symlink_metadata(&path), Ok(meta) if meta.file_type().is_symlink()) {
+                return Ok(-1);
+            }
             let file = match OpenOptions::new().read(true).open(&path) {
                 Ok(f) => f,
                 Err(_) => return Ok(-1),
@@ -563,7 +571,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             } else {
                 format!("{}\n", lines.join("\n"))
             };
-            if fs::write(&path, rewritten.as_bytes()).is_err() {
+            if secure_write_bytes(&path, rewritten.as_bytes()).is_err() {
                 return Ok(-1);
             }
             Ok(write_to_memory(&mut caller, out_ptr as usize, &payload).unwrap_or(-1))
@@ -693,7 +701,7 @@ fn net_uri_within_prefix(requested: &Url, allowed: &Url) -> bool {
 fn kv_root() -> PathBuf {
     env::var("PROVENACT_KV_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp/provenact-kv"))
+        .unwrap_or_else(|_| default_runtime_subdir("kv"))
 }
 
 fn kv_file_path(key: &[u8]) -> PathBuf {
@@ -705,13 +713,40 @@ fn kv_file_path(key: &[u8]) -> PathBuf {
 fn queue_root() -> PathBuf {
     env::var("PROVENACT_QUEUE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp/provenact-queue"))
+        .unwrap_or_else(|_| default_runtime_subdir("queue"))
 }
 
 fn queue_file_path(topic: &[u8]) -> PathBuf {
     let digest = sha256_prefixed(topic);
     let suffix = digest.strip_prefix("sha256:").unwrap_or(&digest);
     queue_root().join(format!("{suffix}.log"))
+}
+
+fn default_runtime_subdir(name: &str) -> PathBuf {
+    if let Ok(home) = env::var("HOME") {
+        return PathBuf::from(home).join(".provenact/runtime").join(name);
+    }
+    PathBuf::from(".provenact-runtime").join(name)
+}
+
+fn secure_write_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+        #[cfg(unix)]
+        {
+            let _ = fs::set_permissions(parent, Permissions::from_mode(0o700));
+        }
+    }
+    if let Ok(meta) = fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() {
+            return Err(std::io::Error::other("refusing to write through symlink"));
+        }
+    }
+    let mut temp = path.to_path_buf();
+    temp.set_extension("tmp");
+    fs::write(&temp, bytes)?;
+    fs::rename(temp, path)?;
+    Ok(())
 }
 
 fn collect_tree_entries(
