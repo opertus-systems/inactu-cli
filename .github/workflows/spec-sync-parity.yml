@@ -1,0 +1,39 @@
+name: spec-sync-parity
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout CLI
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Read pinned spec source
+        id: sync
+        run: |
+          set -euo pipefail
+          SPEC_REPO="$(sed -n 's/^[[:space:]]*"source_repo"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' spec/.sync-source.json)"
+          SPEC_COMMIT="$(sed -n 's/^[[:space:]]*"commit"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' spec/.sync-source.json)"
+          if [[ -z "$SPEC_REPO" || -z "$SPEC_COMMIT" ]]; then
+            echo "error: failed to parse spec/.sync-source.json" >&2
+            exit 1
+          fi
+          echo "repo=$SPEC_REPO" >> "$GITHUB_OUTPUT"
+          echo "commit=$SPEC_COMMIT" >> "$GITHUB_OUTPUT"
+
+      - name: Clone pinned spec source
+        run: |
+          set -euo pipefail
+          git clone "${{ steps.sync.outputs.repo }}" /tmp/provenact-spec
+          git -C /tmp/provenact-spec checkout "${{ steps.sync.outputs.commit }}"
+
+      - name: Verify spec and test-vector parity
+        run: ./scripts/check-spec-sync.sh /tmp/provenact-spec

@@ -76,6 +76,11 @@ pub struct PipelineDagV0 {
     pub pipeline_id: String,
     pub nodes: Vec<PipelineNodeV0>,
     pub edges: Vec<PipelineEdgeV0>,
+    pub input_mapping: Vec<InputMappingRuleV0>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_limits: Option<ResourceLimitsV0>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_cap_sets: Option<BTreeMap<String, Vec<String>>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_policy: Option<RunPolicyV0>,
 }
@@ -87,6 +92,10 @@ pub struct PipelineNodeV0 {
     pub skill: SkillRefV0,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub requested_caps: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limits: Option<ResourceLimitsV0>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_error: Option<String>,
 }
@@ -119,6 +128,25 @@ pub struct PipelineEdgeV0 {
 pub struct MappingRuleV0 {
     pub from_path: String,
     pub to_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InputMappingRuleV0 {
+    pub from: String,
+    pub from_path: String,
+    pub to: String,
+    pub to_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceLimitsV0 {
+    pub cpu_ms: u64,
+    pub mem_mb: u64,
+    pub io_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,12 +332,7 @@ pub fn parse_pipeline_v0_json(bytes: &[u8]) -> Result<PipelineDagV0, VerifyError
         }
         match &node.skill {
             SkillRefV0::Name(skill) => {
-                if skill.trim().is_empty() {
-                    return Err(VerifyError::InvalidV0Pipeline {
-                        reason: format!("node {} has empty skill", node.id),
-                    });
-                }
-                if skill.starts_with("sha256:") && !is_sha256_prefixed_digest(skill) {
+                if !is_sha256_prefixed_digest(skill) {
                     return Err(VerifyError::InvalidV0Pipeline {
                         reason: format!("node {} has invalid skill hash", node.id),
                     });
@@ -343,6 +366,20 @@ pub fn parse_pipeline_v0_json(bytes: &[u8]) -> Result<PipelineDagV0, VerifyError
                     reason: format!("node {} input must be an object", node.id),
                 });
             }
+        }
+        if let Some(requested_caps) = &node.requested_caps {
+            if requested_caps.is_empty()
+                || requested_caps
+                    .iter()
+                    .any(|capability| capability.trim().is_empty())
+            {
+                return Err(VerifyError::InvalidV0Pipeline {
+                    reason: format!("node {} has invalid requested_caps", node.id),
+                });
+            }
+        }
+        if let Some(limits) = &node.limits {
+            validate_resource_limits(limits, &format!("node {} limits", node.id))?;
         }
     }
 
@@ -383,6 +420,51 @@ pub fn parse_pipeline_v0_json(bytes: &[u8]) -> Result<PipelineDagV0, VerifyError
             .or_default()
             .push(edge.to.as_str());
         *inbound_count.entry(edge.to.as_str()).or_insert(0usize) += 1;
+    }
+
+    for rule in &pipeline.input_mapping {
+        if rule.from != "input" && rule.from != "context" {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: "input_mapping.from must be input or context".to_string(),
+            });
+        }
+        if !is_json_path_subset(&rule.from_path) {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("unsupported input_mapping.from_path: {}", rule.from_path),
+            });
+        }
+        if !node_ids.contains(rule.to.as_str()) {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("input_mapping.to references unknown node: {}", rule.to),
+            });
+        }
+        if !is_json_path_subset(&rule.to_path) {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("unsupported input_mapping.to_path: {}", rule.to_path),
+            });
+        }
+    }
+
+    if let Some(limits) = &pipeline.resource_limits {
+        validate_resource_limits(limits, "resource_limits")?;
+    }
+    if let Some(required_cap_sets) = &pipeline.required_cap_sets {
+        if required_cap_sets.is_empty() {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: "required_cap_sets must be non-empty when present".to_string(),
+            });
+        }
+        for (set_name, caps) in required_cap_sets {
+            if set_name.trim().is_empty()
+                || caps.is_empty()
+                || caps.iter().any(|capability| capability.trim().is_empty())
+            {
+                return Err(VerifyError::InvalidV0Pipeline {
+                    reason: "required_cap_sets entries must use non-empty names and capabilities"
+                        .to_string(),
+                });
+            }
+        }
     }
 
     if let Some(policy) = &pipeline.run_policy {
@@ -565,6 +647,20 @@ fn is_json_path_subset(path: &str) -> bool {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '_')
     })
+}
+
+fn validate_resource_limits(limits: &ResourceLimitsV0, field: &str) -> Result<(), VerifyError> {
+    if limits.cpu_ms == 0 || limits.mem_mb == 0 || limits.io_bytes == 0 {
+        return Err(VerifyError::InvalidV0Pipeline {
+            reason: format!("{field} must have cpu_ms/mem_mb/io_bytes > 0"),
+        });
+    }
+    if limits.timeout_ms.is_some_and(|value| value == 0) {
+        return Err(VerifyError::InvalidV0Pipeline {
+            reason: format!("{field}.timeout_ms must be greater than zero"),
+        });
+    }
+    Ok(())
 }
 
 fn is_sha256_prefixed_digest(value: &str) -> bool {

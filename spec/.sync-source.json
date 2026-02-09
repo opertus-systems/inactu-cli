@@ -1,0 +1,8 @@
+{
+  "source_repo": "https://github.com/opertus-systems/provenact-spec.git",
+  "commit": "a922ba7d701262a18382d91230e10371780628b5",
+  "paths": [
+    "spec",
+    "test-vectors"
+  ]
+}

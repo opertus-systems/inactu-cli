@@ -4,18 +4,24 @@
   "nodes": [
     {
       "id": "fetch",
-      "skill": "com.opertus.fetch_url@0.1.0",
+      "skill": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
       "input": {
         "url": "https://example.com/"
+      },
+      "requested_caps": ["net.http"],
+      "limits": {
+        "cpu_ms": 500,
+        "mem_mb": 64,
+        "io_bytes": 1000000
       }
     },
     {
       "id": "parse",
-      "skill": "com.opertus.parse_html@0.1.0"
+      "skill": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
     },
     {
       "id": "summarize",
-      "skill": "com.opertus.summarize@0.1.0",
+      "skill": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
       "on_error": "skip"
     }
   ],
@@ -41,6 +47,29 @@
       ]
     }
   ],
+  "input_mapping": [
+    {
+      "from": "input",
+      "from_path": "$.url",
+      "to": "fetch",
+      "to_path": "$.url"
+    },
+    {
+      "from": "context",
+      "from_path": "$.tenant_id",
+      "to": "summarize",
+      "to_path": "$.tenant"
+    }
+  ],
+  "resource_limits": {
+    "cpu_ms": 2000,
+    "mem_mb": 128,
+    "io_bytes": 8000000,
+    "timeout_ms": 10000
+  },
+  "required_cap_sets": {
+    "default": ["fs.read", "net.http"]
+  },
   "run_policy": {
     "no_network_after_nodes": ["fetch"],
     "max_total_bytes": 8000000,

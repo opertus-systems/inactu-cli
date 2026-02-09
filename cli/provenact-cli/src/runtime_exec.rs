@@ -229,16 +229,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let Some(path_norm) = normalize_abs_path(&path) else {
                 return Ok(-1);
             };
-            require_capability(
-                &mut caller,
-                "fs.read",
-                |value| {
-                    normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&path_norm, &p))
-                        .unwrap_or(false)
-                },
-                "fs.read",
-            )?;
+            require_fs_path_capability(&mut caller, "fs.read", &path_norm, "fs.read", false)?;
             let data = match fs::read(&path_norm) {
                 Ok(v) => v,
                 Err(_) => return Ok(-1),
@@ -270,16 +261,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let Some(root_norm) = normalize_abs_path(&root) else {
                 return Ok(-1);
             };
-            require_capability(
-                &mut caller,
-                "fs.read",
-                |value| {
-                    normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&root_norm, &p))
-                        .unwrap_or(false)
-                },
-                "fs.read",
-            )?;
+            require_fs_path_capability(&mut caller, "fs.read", &root_norm, "fs.read", false)?;
 
             let mut entries = Vec::new();
             collect_tree_entries(Path::new(&root_norm), Path::new(&root_norm), &mut entries)?;
@@ -322,16 +304,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let Some(path_norm) = normalize_abs_path(&path) else {
                 return Ok(-1);
             };
-            require_capability(
-                &mut caller,
-                "fs.write",
-                |value| {
-                    normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&path_norm, &p))
-                        .unwrap_or(false)
-                },
-                "fs.write",
-            )?;
+            require_fs_path_capability(&mut caller, "fs.write", &path_norm, "fs.write", true)?;
             let Some(bytes) = read_from_memory(&mut caller, data_ptr as usize, data_len as usize)
             else {
                 return Ok(-1);
@@ -634,6 +607,40 @@ fn require_capability(
     Ok(())
 }
 
+fn require_fs_path_capability(
+    caller: &mut Caller<'_, HostState>,
+    kind: &str,
+    requested_path: &str,
+    used_marker: &str,
+    allow_missing_leaf: bool,
+) -> anyhow::Result<()> {
+    let allowed = caller
+        .data()
+        .capabilities
+        .get(kind)
+        .map(|values| {
+            values.iter().any(|value| {
+                let Some(prefix) = normalize_abs_path(value) else {
+                    return false;
+                };
+                if !path_within_prefix(requested_path, &prefix) {
+                    return false;
+                }
+                path_within_resolved_prefix(
+                    Path::new(requested_path),
+                    Path::new(&prefix),
+                    allow_missing_leaf,
+                )
+            })
+        })
+        .unwrap_or(false);
+    if !allowed {
+        return Err(anyhow!("required capability missing: {kind}"));
+    }
+    caller.data_mut().caps_used.insert(used_marker.to_string());
+    Ok(())
+}
+
 fn normalize_abs_path(path: &str) -> Option<String> {
     if !path.starts_with('/') {
         return None;
@@ -663,6 +670,44 @@ fn path_within_prefix(path: &str, prefix: &str) -> bool {
         || path
             .strip_prefix(prefix)
             .is_some_and(|rest| rest.starts_with('/'))
+}
+
+fn path_within_resolved_prefix(path: &Path, prefix: &Path, allow_missing_leaf: bool) -> bool {
+    let Some(path_real) = resolve_path_for_comparison(path, allow_missing_leaf) else {
+        return false;
+    };
+    let Some(prefix_real) = resolve_path_for_comparison(prefix, true) else {
+        return false;
+    };
+    path_real == prefix_real || path_real.starts_with(&prefix_real)
+}
+
+fn resolve_path_for_comparison(path: &Path, allow_missing_leaf: bool) -> Option<PathBuf> {
+    if !path.is_absolute() {
+        return None;
+    }
+    if let Ok(canonical) = fs::canonicalize(path) {
+        return Some(canonical);
+    }
+    if !allow_missing_leaf {
+        return None;
+    }
+
+    let mut current = path;
+    let mut suffix = Vec::<std::ffi::OsString>::new();
+    loop {
+        if fs::metadata(current).is_ok() {
+            break;
+        }
+        let name = current.file_name()?;
+        suffix.push(name.to_os_string());
+        current = current.parent()?;
+    }
+    let mut resolved = fs::canonicalize(current).ok()?;
+    for segment in suffix.iter().rev() {
+        resolved.push(segment);
+    }
+    Some(resolved)
 }
 
 fn normalize_uri_path(path: &str) -> Option<String> {
@@ -744,6 +789,13 @@ fn secure_write_bytes(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     }
     let mut temp = path.to_path_buf();
     temp.set_extension("tmp");
+    if let Ok(meta) = fs::symlink_metadata(&temp) {
+        if meta.file_type().is_symlink() {
+            return Err(std::io::Error::other(
+                "refusing to write through symlink temp path",
+            ));
+        }
+    }
     fs::write(&temp, bytes)?;
     fs::rename(temp, path)?;
     Ok(())
@@ -787,4 +839,109 @@ fn collect_tree_entries(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use wat::parse_str;
+
+    #[cfg(unix)]
+    fn make_test_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock should be monotonic")
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("provenact-{name}-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&path).expect("temp dir should be created");
+        path
+    }
+
+    #[cfg(unix)]
+    fn fs_read_test_wasm() -> Vec<u8> {
+        parse_str(
+            r#"(module
+  (import "provenact" "input_len" (func $input_len (result i32)))
+  (import "provenact" "input_read" (func $input_read (param i32 i32 i32) (result i32)))
+  (import "provenact" "fs_read_file" (func $fs_read_file (param i32 i32 i32 i32) (result i32)))
+  (import "provenact" "output_write" (func $output_write (param i32 i32) (result i32)))
+  (memory (export "memory") 2)
+  (func (export "run") (result i32)
+    (local $path_len i32)
+    (local $n i32)
+    call $input_len
+    local.set $path_len
+    i32.const 0
+    i32.const 0
+    local.get $path_len
+    call $input_read
+    drop
+    i32.const 0
+    local.get $path_len
+    i32.const 2048
+    i32.const 65536
+    call $fs_read_file
+    local.set $n
+    local.get $n
+    i32.const 0
+    i32.lt_s
+    if
+      i32.const 1
+      return
+    end
+    i32.const 2048
+    local.get $n
+    call $output_write
+    drop
+    i32.const 0
+  )
+)"#,
+        )
+        .expect("wat should compile")
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn fs_read_allows_normal_path_inside_capability_prefix() {
+        let root = make_test_dir("fs-read-allow");
+        let allowed = root.join("allowed");
+        fs::create_dir_all(&allowed).expect("allowed dir should exist");
+        let file = allowed.join("ok.txt");
+        fs::write(&file, b"ok").expect("file write should succeed");
+
+        let wasm = fs_read_test_wasm();
+        let capabilities = vec![Capability {
+            kind: "fs.read".to_string(),
+            value: allowed.to_string_lossy().to_string(),
+        }];
+        let input = file.to_string_lossy().to_string().into_bytes();
+        let outcome = execute_wasm(&wasm, "run", &input, &capabilities).expect("wasm should run");
+        assert_eq!(outcome.outputs, b"ok");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn fs_read_rejects_symlink_escape_even_when_prefix_matches_lexically() {
+        use std::os::unix::fs::symlink;
+
+        let root = make_test_dir("fs-read-symlink-deny");
+        let allowed = root.join("allowed");
+        fs::create_dir_all(&allowed).expect("allowed dir should exist");
+
+        let secret = root.join("secret.txt");
+        fs::write(&secret, b"TOP-SECRET-SYMLINK-ESCAPE").expect("secret file write should succeed");
+        symlink(&root, allowed.join("link")).expect("symlink should be created");
+
+        let escape_path = allowed.join("link").join("secret.txt");
+        let wasm = fs_read_test_wasm();
+        let capabilities = vec![Capability {
+            kind: "fs.read".to_string(),
+            value: allowed.to_string_lossy().to_string(),
+        }];
+        let input = escape_path.to_string_lossy().to_string().into_bytes();
+        let result = execute_wasm(&wasm, "run", &input, &capabilities);
+        assert!(result.is_err(), "symlink escape should be denied");
+    }
 }

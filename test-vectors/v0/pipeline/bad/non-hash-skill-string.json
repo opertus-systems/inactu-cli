@@ -1,10 +1,10 @@
 {
   "schema_version": "v0",
-  "pipeline_id": "com.opertus.demo.invalid_hash_string",
+  "pipeline_id": "com.opertus.demo.non_hash_skill_string",
   "nodes": [
     {
       "id": "fetch",
-      "skill": "sha256:zzzz"
+      "skill": "com.opertus.fetch@0.1.0"
     }
   ],
   "edges": [],
