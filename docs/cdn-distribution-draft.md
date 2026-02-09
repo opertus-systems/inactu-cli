@@ -3,7 +3,7 @@
 Status: draft (non-normative).
 
 This document defines practical CDN/operator behavior for artifact distribution
-without changing Inactu's core cryptographic profile.
+without changing Provenact's core cryptographic profile.
 
 ## Scope
 
@@ -42,7 +42,7 @@ Each published object must carry:
 Recommended exposure:
 - `ETag` set to a stable token that is not ambiguous with multipart MD5.
 - `Content-MD5` header set when upstream/CDN supports it end-to-end.
-- `X-Inactu-SHA256` and `X-Inactu-MD5` response headers for explicit client checks.
+- `X-Provenact-SHA256` and `X-Provenact-MD5` response headers for explicit client checks.
 
 ## Upload/Publish Gate
 
@@ -124,6 +124,6 @@ Phase 3:
 
 ## Compatibility Note
 
-Because Inactu v0 cryptographic profile is SHA-256 + Ed25519, this draft treats
+Because Provenact v0 cryptographic profile is SHA-256 + Ed25519, this draft treats
 MD5 as transport corruption detection only. Security trust and artifact identity
 remain bound to SHA-256 digests and signatures.

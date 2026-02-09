@@ -1,6 +1,6 @@
 # Observability
 
-This document defines the baseline observability contract for Inactu v0.
+This document defines the baseline observability contract for Provenact v0.
 
 ## Goals
 
@@ -13,25 +13,25 @@ This document defines the baseline observability contract for Inactu v0.
 
 The CLI emits structured JSON events to `stderr` when:
 
-- `INACTU_OBS_JSON=1` (also accepts `true` or `yes`)
+- `PROVENACT_OBS_JSON=1` (also accepts `true` or `yes`)
 
 Normal CLI behavior is unchanged when telemetry is disabled.
 
 ## Emitted Events
 
-`inactu.command`
+`provenact.command`
 - command-level result for `verify`, `inspect`, `pack`, `sign`, `run`, `verify-receipt`
 - fields: `command`, `status`, `duration_ms`, optional `error`
 
-`inactu.verify`
+`provenact.verify`
 - bundle verification flow
 - fields: `status`, `artifact`, `signer_count`, `preflight_ms`, `trust_ms`, `duration_ms`, optional `error`
 
-`inactu.run`
+`provenact.run`
 - end-to-end execution flow
 - fields: `status`, `artifact`, `capability_count`, `verify_ms`, `execute_ms`, `receipt_ms`, `duration_ms`, optional `error`
 
-`inactu.verify_receipt`
+`provenact.verify_receipt`
 - receipt validation flow
 - fields: `status`, `artifact`, `duration_ms`, optional `error`
 
@@ -43,19 +43,19 @@ All events include:
 
 Recommended metrics derived from events:
 
-- `inactu_command_total{command,status}`
-- `inactu_command_duration_ms{command}` (histogram)
-- `inactu_verify_total{status}`
-- `inactu_verify_duration_ms` (histogram)
-- `inactu_run_total{status}`
-- `inactu_run_duration_ms` (histogram)
-- `inactu_run_stage_duration_ms{stage=verify|execute|receipt}` (histogram)
-- `inactu_verify_receipt_total{status}`
-- `inactu_verify_receipt_duration_ms` (histogram)
+- `provenact_command_total{command,status}`
+- `provenact_command_duration_ms{command}` (histogram)
+- `provenact_verify_total{status}`
+- `provenact_verify_duration_ms` (histogram)
+- `provenact_run_total{status}`
+- `provenact_run_duration_ms` (histogram)
+- `provenact_run_stage_duration_ms{stage=verify|execute|receipt}` (histogram)
+- `provenact_verify_receipt_total{status}`
+- `provenact_verify_receipt_duration_ms` (histogram)
 
 Error analysis:
 
-- `inactu_error_total{event,error_class}`
+- `provenact_error_total{event,error_class}`
   - classify from `error` string prefix (for example: hash mismatch, signature invalid, policy deny, runtime trap)
 
 ## Initial SLO Targets

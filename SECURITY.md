@@ -1,10 +1,10 @@
 # SECURITY.md
 
-## Security Policy — Inactu
+## Security Policy — Provenact
 
-This document describes the security posture, threat assumptions, and vulnerability handling process for **Inactu**.
+This document describes the security posture, threat assumptions, and vulnerability handling process for **Provenact**.
 
-Inactu is a **security-sensitive execution substrate**. Security considerations are first-class and prioritized over convenience or feature velocity.
+Provenact is a **security-sensitive execution substrate**. Security considerations are first-class and prioritized over convenience or feature velocity.
 
 ---
 
@@ -30,7 +30,7 @@ It does **not** apply to:
 
 ## Threat Model (Summary)
 
-Inactu assumes the following adversarial conditions:
+Provenact assumes the following adversarial conditions:
 
 - Skills may be malicious or intentionally crafted to escape confinement
 - Inputs may be adversarial
@@ -50,7 +50,7 @@ Key lifecycle operations are documented in:
 
 ## Security Goals
 
-Inactu is designed to ensure:
+Provenact is designed to ensure:
 
 1. **Integrity**
    - Executed code matches the signed artifact
@@ -75,7 +75,7 @@ Inactu is designed to ensure:
 
 ## Explicit Non-Goals
 
-Inactu does NOT currently aim to:
+Provenact does NOT currently aim to:
 
 - Defend against a fully compromised host kernel or hypervisor
 - Mitigate hardware-level side-channel attacks (e.g. speculative execution)
@@ -87,7 +87,7 @@ Inactu does NOT currently aim to:
 
 ## Supported Cryptography
 
-Inactu uses only:
+Provenact uses only:
 
 - Well-established cryptographic primitives
 - Widely reviewed libraries
@@ -126,7 +126,7 @@ Please report security issues **privately**.
 Do NOT open a public issue for vulnerabilities.
 
 GitHub Security Advisories:
-- https://github.com/opertus-systems/inactu/security/advisories
+- https://github.com/opertus-systems/provenact/security/advisories
 
 ### How to Report
 - Email: security@opertus.systems (preferred)
@@ -180,7 +180,7 @@ Tooling choices will favor signal over noise.
 
 ## Final Note
 
-If a change makes Inactu:
+If a change makes Provenact:
 - harder to audit
 - harder to reason about
 - less explicit about authority

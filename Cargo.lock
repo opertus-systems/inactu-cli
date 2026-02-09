@@ -848,45 +848,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "inactu-cli"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "base64",
- "ed25519-dalek",
- "getrandom 0.4.1",
- "inactu-verifier",
- "serde",
- "serde_json",
- "tar",
- "ureq",
- "url",
- "wasmtime",
- "wat",
- "zstd",
-]
-
-[[package]]
-name = "inactu-host"
-version = "0.2.0"
-
-[[package]]
-name = "inactu-verifier"
-version = "0.2.0"
-dependencies = [
- "base64",
- "ed25519-dalek",
- "md-5",
- "serde",
- "serde_jcs",
- "serde_json",
- "serde_yaml",
- "sha2",
- "thiserror 2.0.18",
- "url",
-]
-
-[[package]]
 name = "indexmap"
 version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1144,6 +1105,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "provenact-cli"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "ed25519-dalek",
+ "getrandom 0.4.1",
+ "provenact-verifier",
+ "serde",
+ "serde_json",
+ "tar",
+ "ureq",
+ "url",
+ "wasmtime",
+ "wat",
+ "zstd",
+]
+
+[[package]]
+name = "provenact-host"
+version = "0.2.0"
+
+[[package]]
+name = "provenact-verifier"
+version = "0.2.0"
+dependencies = [
+ "base64",
+ "ed25519-dalek",
+ "md-5",
+ "serde",
+ "serde_jcs",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "thiserror 2.0.18",
+ "url",
 ]
 
 [[package]]

@@ -4,14 +4,14 @@ set -euo pipefail
 files=(
   "README.md"
   "Makefile"
-  "cli/inactu-cli/README.md"
+  "cli/provenact-cli/README.md"
   "docs/*.md"
   ".github/workflows/*.yml"
 )
 
 awk '
 function is_verify_run_command(s) {
-  return s ~ /inactu-cli[[:space:]]+(verify|run)([[:space:]]|$)/ || s ~ /cargo[[:space:]]+run[[:space:]]+-p[[:space:]]+inactu-cli[[:space:]]+--[[:space:]]+(verify|run)([[:space:]]|$)/ || s ~ /\$\(CLI\)[[:space:]]+(verify|run)([[:space:]]|$)/;
+  return s ~ /provenact-cli[[:space:]]+(verify|run)([[:space:]]|$)/ || s ~ /cargo[[:space:]]+run[[:space:]]+-p[[:space:]]+provenact-cli[[:space:]]+--[[:space:]]+(verify|run)([[:space:]]|$)/ || s ~ /\$\(CLI\)[[:space:]]+(verify|run)([[:space:]]|$)/;
 }
 
 function flush_command() {

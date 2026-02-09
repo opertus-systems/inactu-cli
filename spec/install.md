@@ -1,7 +1,7 @@
 # Install and Local Store Specification (v0)
 
 This document defines normative install semantics for content-addressed skill
-packages in Inactu v0.
+packages in Provenact v0.
 
 ## 1. Canonical Install Artifact
 
@@ -60,7 +60,7 @@ Implementations MUST enforce the following sequence:
 
 Implementations MUST persist installed content at:
 
-`~/.inactu/store/sha256/<hash>/`
+`~/.provenact/store/sha256/<hash>/`
 
 Equivalent custom home paths (for tests or operators) MUST preserve
 `store/sha256/<hash>` structure beneath configured home.
@@ -79,7 +79,7 @@ If present in the artifact, implementations MUST persist:
 
 Implementations MUST maintain local install index metadata at:
 
-`~/.inactu/index.json`
+`~/.provenact/index.json`
 
 Index format MUST validate against `spec/install/index.schema.json`.
 

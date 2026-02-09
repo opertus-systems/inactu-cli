@@ -1,6 +1,6 @@
-# Inactu Specification (v0)
+# Provenact Specification (v0)
 
-This file is the top-level specification index for Inactu v0.
+This file is the top-level specification index for Provenact v0.
 Normative detail lives under `spec/`.
 Repository scope boundaries are defined in `AGENTS.md`.
 
@@ -17,14 +17,14 @@ Priority order:
 
 ## Scope
 
-Inactu is a secure execution substrate for immutable, verifiable skills.
-Inactu includes:
+Provenact is a secure execution substrate for immutable, verifiable skills.
+Provenact includes:
 - skill packaging
 - signing and verification
 - capability-gated WASM execution
 - execution receipts and auditability
 
-Inactu does not include:
+Provenact does not include:
 - agents
 - planners
 - schedulers
@@ -101,7 +101,7 @@ Receipt shape is defined by `spec/execution-receipt.schema.json`.
 Failed executions SHOULD emit a best-effort failure transcript outside the
 success receipt schema.
 
-CLI contract: `inactu-cli run` requires `--receipt`; there is no successful run
+CLI contract: `provenact-cli run` requires `--receipt`; there is no successful run
 path without writing a receipt file.
 
 ## v0 Non-Goals

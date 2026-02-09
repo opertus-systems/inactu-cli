@@ -1,4 +1,4 @@
-# Agents and Inactu
+# Agents and Provenact
 
 Canonical boundary guidance is defined in `AGENTS.md`.
 

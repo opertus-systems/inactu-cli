@@ -1,4 +1,4 @@
-# Contributing to Inactu
+# Contributing to Provenact
 
 We value:
 - Explicitness over magic

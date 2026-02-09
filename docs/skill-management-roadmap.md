@@ -1,21 +1,21 @@
 # Skill Management Roadmap (Cross-Agent Compatibility)
 
-This document defines how Inactu can support broad skill portability without
+This document defines how Provenact can support broad skill portability without
 violating repository scope boundaries in `AGENTS.md`.
 
-Inactu remains the execution substrate. Agent orchestration remains out of repo.
+Provenact remains the execution substrate. Agent orchestration remains out of repo.
 
 ## Objectives
 
 - Use one portable skill artifact contract across ecosystems.
-- Keep execution verification and policy enforcement in Inactu.
+- Keep execution verification and policy enforcement in Provenact.
 - Make skill-native integration the primary compatibility path.
 - Support major agent/tool ecosystems through optional external adapters.
 - Align with open standards for packaging, signing, and typed interfaces.
 
 ## Boundary Contract
 
-Inactu owns:
+Provenact owns:
 - skill packaging and distribution format
 - signing and verification
 - capability policy enforcement
@@ -29,7 +29,7 @@ Out of scope for this repository:
 
 ## Compatibility Principles
 
-- Inactu is fully usable through its native skill contract and CLI/API.
+- Provenact is fully usable through its native skill contract and CLI/API.
 - No adapter is required to package, verify, authorize, execute, or receipt a skill.
 - Adapters are optional convenience layers for external ecosystems.
 - Adapters must not redefine security, capability, or verification semantics.
@@ -53,14 +53,14 @@ Out of scope for this repository:
 
 ## Ecosystem Compatibility (Optional, Out-of-Repo Adapters)
 
-- Native integration via Inactu skill APIs/CLI should be sufficient on its own.
+- Native integration via Provenact skill APIs/CLI should be sufficient on its own.
 - Adapters are translation layers for ecosystems that cannot call native flows.
 - MCP tool adapters
 - OpenAI-style tool calling adapters
 - LangChain/LangGraph wrappers
 - AutoGen/CrewAI wrappers
 
-Each adapter should map ecosystem input into the same Inactu invoke lifecycle:
+Each adapter should map ecosystem input into the same Provenact invoke lifecycle:
 `resolve -> verify -> authorize -> execute -> receipt`.
 
 ## Work Plan (90 Days)
@@ -87,7 +87,7 @@ Adapter start gate (must pass before any adapter implementation):
 - Publish a reference native invoke contract (SDK/CLI examples).
 - Validate native cross-runtime compatibility with shared vectors.
 - Implement one optional adapter for ecosystem convenience.
-- Publish mapping docs from adapter contracts to Inactu contracts.
+- Publish mapping docs from adapter contracts to Provenact contracts.
 
 ### Phase 4 (Weeks 11-12): Conformance and Publication
 
@@ -108,7 +108,7 @@ Adapter start gate (must pass before any adapter implementation):
   runtime environments.
 - Receipts are schema-valid and hash-stable across environments.
 - Capability enforcement remains identical regardless of adapter.
-- No agent-loop logic is added to Inactu core.
+- No agent-loop logic is added to Provenact core.
 
 ## Risks and Mitigations
 

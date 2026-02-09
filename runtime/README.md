@@ -17,7 +17,7 @@ Rules:
   - `() -> i32` (output bytes are decimal UTF-8 return value)
   - `() -> ()` (output bytes are empty)
 - WASM execution is fuel-metered and resource-limited (memory/tables/instances) per run.
-- v0 runtime profile uses the Inactu host ABI; WASI is not part of the v0
+- v0 runtime profile uses the Provenact host ABI; WASI is not part of the v0
   normative contract.
 - Failed runs MUST not emit a success receipt.
 

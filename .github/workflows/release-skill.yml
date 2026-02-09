@@ -31,8 +31,8 @@ jobs:
       - name: Run conformance
         run: cargo conformance
 
-      - name: Run inactu-cli tests
-        run: cargo test -p inactu-cli
+      - name: Run provenact-cli tests
+        run: cargo test -p provenact-cli
 
       - name: Prepare demo bundle artifact
         run: |
@@ -65,7 +65,7 @@ jobs:
       - name: Push OCI artifact
         run: |
           oras push "$OCI_REF" \
-            --artifact-type application/vnd.inactu.bundle.v1 \
+            --artifact-type application/vnd.provenact.bundle.v1 \
             dist/skill.wasm:application/wasm \
             dist/manifest.json:application/json \
             dist/signatures.json:application/json

@@ -1,6 +1,6 @@
 # Docs
 
-Architecture and onboarding for Inactu v0.
+Architecture and onboarding for Provenact v0.
 
 This repository's authority order is:
 - `AGENTS.md` (project scope and boundaries)

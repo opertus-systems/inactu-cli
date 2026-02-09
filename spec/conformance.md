@@ -1,6 +1,6 @@
 # Conformance Requirements (v0)
 
-This document defines minimum conformance checks for Inactu v0 implementations.
+This document defines minimum conformance checks for Provenact v0 implementations.
 
 ## 1. Policy Schema Conformance
 
@@ -86,12 +86,12 @@ At minimum:
 - local index metadata is maintained and schema-valid
 
 Required implementation outcomes:
-- `inactu-cli tests/archive.rs::archive_is_deterministic_and_canonical` MUST pass.
-- `inactu-cli tests/install.rs::install_persists_store_and_index` MUST pass.
-- `inactu-cli tests/install.rs::install_rejects_oci_refs_in_v0` MUST pass.
-- `inactu-cli tests/install.rs::install_accepts_file_url_source` MUST pass.
-- `inactu-cli tests/install.rs::install_accepts_http_source` MUST pass.
-- `inactu-cli tests/install.rs::install_rejects_missing_manifest_in_archive` MUST pass.
+- `provenact-cli tests/archive.rs::archive_is_deterministic_and_canonical` MUST pass.
+- `provenact-cli tests/install.rs::install_persists_store_and_index` MUST pass.
+- `provenact-cli tests/install.rs::install_rejects_oci_refs_in_v0` MUST pass.
+- `provenact-cli tests/install.rs::install_accepts_file_url_source` MUST pass.
+- `provenact-cli tests/install.rs::install_accepts_http_source` MUST pass.
+- `provenact-cli tests/install.rs::install_rejects_missing_manifest_in_archive` MUST pass.
 
 ## Conformance Command
 

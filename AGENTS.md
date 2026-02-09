@@ -2,13 +2,13 @@
 
 This repository **does not implement agents**.
 
-This file exists to explicitly document the boundary between **Inactu** and any future or external agent systems, and to prevent scope creep inside the core execution substrate.
+This file exists to explicitly document the boundary between **Provenact** and any future or external agent systems, and to prevent scope creep inside the core execution substrate.
 
 ---
 
 ## What This Repo Is
 
-**Inactu** is a secure execution substrate for:
+**Provenact** is a secure execution substrate for:
 
 - immutable executables (“skills”)
 - explicit capability enforcement
@@ -56,13 +56,13 @@ A higher-level system that:
 - invokes skills/tools as part of a loop
 - may include nondeterministic components
 
-Agents are **compositions built on top of Inactu**, not part of it.
+Agents are **compositions built on top of Provenact**, not part of it.
 
 ---
 
 ## The Boundary (Non‑Negotiable)
 
-Inactu provides **safe execution**.
+Provenact provides **safe execution**.
 
 Agents provide **decision-making and orchestration**.
 
@@ -76,9 +76,9 @@ Any feature proposal that introduces “agency” belongs in a **different proje
 
 ---
 
-## What Inactu May Support (Agent‑Adjacent Only)
+## What Provenact May Support (Agent‑Adjacent Only)
 
-Inactu may support the *needs of agents* only insofar as they improve safe execution:
+Provenact may support the *needs of agents* only insofar as they improve safe execution:
 
 - strict tool isolation
 - capability-limited I/O
@@ -100,7 +100,7 @@ If a proposed change answers any of the following, it probably does NOT belong h
 - “How does it browse the web?”
 - “How does it schedule tasks?”
 
-Inactu should instead answer:
+Provenact should instead answer:
 
 - “What ran?”
 - “Under what authority?”
@@ -113,7 +113,7 @@ Inactu should instead answer:
 
 A sane architecture:
 
-1. **Inactu (this repo)**
+1. **Provenact (this repo)**
    - packaging
    - signing
    - verification
@@ -133,7 +133,7 @@ A sane architecture:
 
 ## One‑Line Rule
 
-**Inactu executes verified skills. Agents live elsewhere.**
+**Provenact executes verified skills. Agents live elsewhere.**
 
 ---
 

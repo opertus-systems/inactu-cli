@@ -1,6 +1,6 @@
 # Hashing and Signature Rules (v0)
 
-This document defines deterministic hash and signature preimages for Inactu v0.
+This document defines deterministic hash and signature preimages for Provenact v0.
 
 ## Common Rules
 

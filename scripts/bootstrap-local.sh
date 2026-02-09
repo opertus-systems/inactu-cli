@@ -12,7 +12,7 @@ need_cmd() {
   return 0
 }
 
-echo "== inactu local bootstrap check =="
+echo "== provenact local bootstrap check =="
 
 missing=0
 
@@ -50,7 +50,7 @@ command -v trivy >/dev/null 2>&1 && trivy version || true
 
 echo
 echo "== local build smoke =="
-cargo build -p inactu-cli
+cargo build -p provenact-cli
 
 echo
 if [[ "$missing" -ne 0 ]]; then

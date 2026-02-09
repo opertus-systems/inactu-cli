@@ -1,0 +1,7 @@
+{
+  "framework": "manual-tool-caller",
+  "tool": "provenact.execute_skill",
+  "arguments": {
+    "fixture": "echo-v0"
+  }
+}

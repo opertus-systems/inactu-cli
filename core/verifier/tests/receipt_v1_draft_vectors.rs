@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use inactu_verifier::parse_receipt_v1_draft_json;
+use provenact_verifier::parse_receipt_v1_draft_json;
 
 fn vectors_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

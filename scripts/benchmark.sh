@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CLI_BIN="${INACTU_CLI_BIN:-$ROOT_DIR/target/debug/inactu-cli}"
+CLI_BIN="${PROVENACT_CLI_BIN:-$ROOT_DIR/target/debug/provenact-cli}"
 ITERATIONS="${ITERATIONS:-15}"
 OUT_FILE="${OUT_FILE:-$ROOT_DIR/bench/latest.json}"
 
@@ -16,7 +16,7 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 if [[ ! -x "$CLI_BIN" ]]; then
-  cargo build -p inactu-cli --manifest-path "$ROOT_DIR/Cargo.toml" >/dev/null
+  cargo build -p provenact-cli --manifest-path "$ROOT_DIR/Cargo.toml" >/dev/null
 fi
 
 BUNDLE="$TMP_DIR/bench.bundle"

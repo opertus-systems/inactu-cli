@@ -15,7 +15,7 @@
     "code": "policy_deny"
   },
   "runtime": {
-    "name": "inactu-runtime",
+    "name": "provenact-runtime",
     "version": "0.1.0"
   },
   "started_at": 1738848000,

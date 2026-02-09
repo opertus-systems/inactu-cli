@@ -1,6 +1,6 @@
 [advisories]
 ignore = [
   # Transitive via wasmtime profiling internals; no direct runtime trust boundary
-  # in Inactu. Revisit after upstream replaces this crate.
+  # in Provenact. Revisit after upstream replaces this crate.
   "RUSTSEC-2025-0057",
 ]

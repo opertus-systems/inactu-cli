@@ -1,5 +1,5 @@
 {
-  "source": "https://github.com/opertus/inactu",
+  "source": "https://github.com/opertus/provenact",
   "commit": "8f9c1d2",
   "build_system": "cargo",
   "build_recipe_hash": "sha256:XYZ"

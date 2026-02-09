@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0-draft",
-  "id": "inactu.echo.minimal",
+  "id": "provenact.echo.minimal",
   "name": "echo.minimal",
   "version": "0.1.0",
   "entrypoint": "run",

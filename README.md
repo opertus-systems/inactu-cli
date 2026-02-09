@@ -1,24 +1,24 @@
-# Inactu
+# Provenact
 
 Verifiable execution substrate for immutable skills.
 
-## About Inactu
+## About Provenact
 
-Inactu verifies and executes immutable, attestable skills with strict
+Provenact verifies and executes immutable, attestable skills with strict
 capability controls, deterministic verification/execution contracts, and signed
 provenance. It is an execution substrate, not an agent framework: packaging,
 signing, verification, and policy-constrained runtime with auditable receipts.
 
-## What Inactu Is
+## What Provenact Is
 
-Inactu provides:
+Provenact provides:
 - a format and trust model for immutable executable bundles
 - cryptographic attestation of code, inputs, and declared capabilities
 - a sandboxed runtime for deterministic, policy-constrained execution
 - tooling to package, sign, verify, inspect, and run skills
 - conformance vectors and receipt verification for auditability
 
-Inactu is not an agent framework, workflow engine, or orchestration layer.
+Provenact is not an agent framework, workflow engine, or orchestration layer.
 
 ## Core Principles
 
@@ -28,7 +28,7 @@ Inactu is not an agent framework, workflow engine, or orchestration layer.
 4. Deterministic execution.
 5. Composability without trust collapse.
 
-## What Inactu Is Not
+## What Provenact Is Not
 
 - Not an LLM/agent framework
 - Not a scheduler or workflow orchestrator
@@ -38,7 +38,7 @@ Inactu is not an agent framework, workflow engine, or orchestration layer.
 ## Repository Layout
 
 ```text
-inactu/
+provenact/
 ├─ spec/            # Normative specs (formats, policies, threat model)
 ├─ core/            # Verification, signing, policy libraries (Rust)
 ├─ runtime/         # Runtime execution/transcript docs
@@ -59,7 +59,7 @@ Execution is intentionally split into narrow layers:
 - policy and capability evaluation
 - canonical hashing and signature checks
 
-2. `cli/inactu-cli`
+2. `cli/provenact-cli`
 - user-facing command orchestration (`pack`, `sign`, `verify`, `run`)
 - preflight bundle validation and trust-anchor handling
 - runtime invocation with resource limits
@@ -77,7 +77,7 @@ v0.1.0 baseline released; current work is hardening and operational polish.
 Stability notes:
 - v0 bundle/manifest/policy/receipt schemas are normative and SemVer-governed.
 - Fields and commands marked `experimental` are explicitly unstable.
-- `inactu-cli run` requires `--receipt`; successful runs always emit a receipt.
+- `provenact-cli run` requires `--receipt`; successful runs always emit a receipt.
 - External timestamp authority is out of scope for v0 receipts.
 - Reproducible builds are a roadmap objective; v0 does not yet publish CI build
   reproducibility proofs.
@@ -91,7 +91,7 @@ Assumptions and non-goals are defined in `spec/threat-model.md`.
 ## Runtime Profile (v0)
 
 - Artifact format: WebAssembly module (`.wasm`) validated by Wasmtime.
-- Host interface: Inactu host ABI (`docs/runtime-host-abi.md`).
+- Host interface: Provenact host ABI (`docs/runtime-host-abi.md`).
 - WASI imports are not part of the v0 normative runtime contract.
 
 ## Conformance And Release
@@ -107,19 +107,19 @@ Assumptions and non-goals are defined in `spec/threat-model.md`.
 ## Secure CLI Flow (Quickstart)
 
 1. Pack:
-`inactu-cli pack --bundle ./bundle --wasm ./skill.wasm --manifest ./manifest.json`
+`provenact-cli pack --bundle ./bundle --wasm ./skill.wasm --manifest ./manifest.json`
 
 2. Sign:
-`inactu-cli sign --bundle ./bundle --signer alice.dev --secret-key ./alice.key`
+`provenact-cli sign --bundle ./bundle --signer alice.dev --secret-key ./alice.key`
 
 3. Pin trust anchor digest:
 `KEYS_DIGEST="$(shasum -a 256 ./public-keys.json | awk '{print "sha256:"$1}')"`.
 
 4. Verify:
-`inactu-cli verify --bundle ./bundle --keys ./public-keys.json --keys-digest "$KEYS_DIGEST"`
+`provenact-cli verify --bundle ./bundle --keys ./public-keys.json --keys-digest "$KEYS_DIGEST"`
 
 5. Run:
-`inactu-cli run --bundle ./bundle --keys ./public-keys.json --keys-digest "$KEYS_DIGEST" --policy ./policy.json --input ./input.json --receipt ./receipt.json`
+`provenact-cli run --bundle ./bundle --keys ./public-keys.json --keys-digest "$KEYS_DIGEST" --policy ./policy.json --input ./input.json --receipt ./receipt.json`
 
 ## Specification Notes
 
