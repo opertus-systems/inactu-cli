@@ -296,6 +296,7 @@ pub struct CapabilityCeiling {
     pub env: Option<Vec<String>>,
     pub exec: Option<bool>,
     pub time: Option<bool>,
+    pub random: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -968,9 +969,10 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
             allowed.iter().any(|name| name == &capability.value)
         }
         "exec" => capability.value == "true" && ceiling.exec.unwrap_or(false),
+        "exec.safe" => !capability.value.is_empty() && ceiling.exec.unwrap_or(false),
         "time" => capability.value == "true" && ceiling.time.unwrap_or(false),
         "time.now" => !capability.value.is_empty() && ceiling.time.unwrap_or(false),
-        "random.bytes" => !capability.value.is_empty() && ceiling.time.unwrap_or(false),
+        "random.bytes" => !capability.value.is_empty() && ceiling.random.unwrap_or(false),
         "kv.read" => {
             let Some(kv) = &ceiling.kv else {
                 return false;
@@ -1438,6 +1440,7 @@ mod tests {
                 env: None,
                 exec: Some(false),
                 time: Some(false),
+                random: Some(false),
             },
         };
         let runtime = RuntimeV1Draft {
@@ -1575,6 +1578,7 @@ capability_ceiling:
                 env: None,
                 exec: Some(false),
                 time: Some(false),
+                random: Some(false),
             },
         };
         assert!(verify_trusted_signers(&manifest, &signatures, &policy).is_ok());
@@ -1614,6 +1618,7 @@ capability_ceiling:
                 env: None,
                 exec: Some(false),
                 time: Some(false),
+                random: Some(false),
             },
         };
         assert!(matches!(
@@ -1656,6 +1661,7 @@ capability_ceiling:
                 env: None,
                 exec: Some(false),
                 time: Some(false),
+                random: Some(false),
             },
         };
         assert!(matches!(
@@ -1677,6 +1683,7 @@ capability_ceiling:
                 env: None,
                 exec: Some(false),
                 time: Some(false),
+                random: Some(false),
             },
         };
         let requested = vec![Capability {
@@ -1702,6 +1709,7 @@ capability_ceiling:
                 env: None,
                 exec: Some(false),
                 time: Some(false),
+                random: Some(false),
             },
         };
         let requested = vec![Capability {

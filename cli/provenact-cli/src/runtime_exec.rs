@@ -3,9 +3,12 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::json;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
+use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::fill as random_fill_os;
@@ -19,6 +22,9 @@ use crate::constants::{
     WASM_FUEL_LIMIT, WASM_INSTANCES_LIMIT, WASM_MEMORIES_LIMIT, WASM_MEMORY_LIMIT_BYTES,
     WASM_TABLES_LIMIT, WASM_TABLE_ELEMENTS_LIMIT,
 };
+
+const PATH_LOCK_RETRIES: usize = 50;
+const PATH_LOCK_RETRY_DELAY_MS: u64 = 10;
 
 struct HostState {
     limits: StoreLimits,
@@ -426,6 +432,10 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                     return Ok(-1);
                 }
             }
+            let _guard = match acquire_path_lock(&path) {
+                Some(guard) => guard,
+                None => return Ok(-1),
+            };
             if fs::write(path, value).is_err() {
                 return Ok(-1);
             }
@@ -456,7 +466,12 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 |value| value == "*" || value == key,
                 "kv.get",
             )?;
-            let data = match fs::read(kv_file_path(&key_bytes)) {
+            let path = kv_file_path(&key_bytes);
+            let _guard = match acquire_path_lock(&path) {
+                Some(guard) => guard,
+                None => return Ok(-1),
+            };
+            let data = match fs::read(path) {
                 Ok(v) => v,
                 Err(_) => return Ok(-1),
             };
@@ -502,11 +517,17 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 }
             }
             let encoded = STANDARD.encode(message);
+            let _guard = match acquire_path_lock(&path) {
+                Some(guard) => guard,
+                None => return Ok(-1),
+            };
             let mut file = match OpenOptions::new().create(true).append(true).open(path) {
                 Ok(f) => f,
                 Err(_) => return Ok(-1),
             };
-            if file.write_all(encoded.as_bytes()).is_err() || file.write_all(b"\n").is_err() {
+            let mut line = encoded.into_bytes();
+            line.push(b'\n');
+            if file.write_all(&line).is_err() {
                 return Ok(-1);
             }
             Ok(0)
@@ -538,6 +559,10 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 "queue.consume",
             )?;
             let path = queue_file_path(&topic_bytes);
+            let _guard = match acquire_path_lock(&path) {
+                Some(guard) => guard,
+                None => return Ok(-1),
+            };
             let file = match OpenOptions::new().read(true).open(&path) {
                 Ok(f) => f,
                 Err(_) => return Ok(-1),
@@ -693,7 +718,7 @@ fn net_uri_within_prefix(requested: &Url, allowed: &Url) -> bool {
 fn kv_root() -> PathBuf {
     env::var("PROVENACT_KV_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp/provenact-kv"))
+        .unwrap_or_else(|_| default_runtime_root("kv"))
 }
 
 fn kv_file_path(key: &[u8]) -> PathBuf {
@@ -705,13 +730,66 @@ fn kv_file_path(key: &[u8]) -> PathBuf {
 fn queue_root() -> PathBuf {
     env::var("PROVENACT_QUEUE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp/provenact-queue"))
+        .unwrap_or_else(|_| default_runtime_root("queue"))
 }
 
 fn queue_file_path(topic: &[u8]) -> PathBuf {
     let digest = sha256_prefixed(topic);
     let suffix = digest.strip_prefix("sha256:").unwrap_or(&digest);
     queue_root().join(format!("{suffix}.log"))
+}
+
+fn default_runtime_root(kind: &str) -> PathBuf {
+    if let Some(home) = env::var_os("PROVENACT_HOME") {
+        return PathBuf::from(home).join("runtime").join(kind);
+    }
+    if let Some(home) = env::var_os("HOME") {
+        return PathBuf::from(home)
+            .join(".provenact")
+            .join("runtime")
+            .join(kind);
+    }
+    env::temp_dir().join(format!("provenact-{kind}"))
+}
+
+fn path_lock_path(path: &Path) -> PathBuf {
+    let mut lock_name: OsString = path.as_os_str().to_os_string();
+    lock_name.push(".lock");
+    PathBuf::from(lock_name)
+}
+
+fn acquire_path_lock(path: &Path) -> Option<PathLockGuard> {
+    let lock_path = path_lock_path(path);
+    if let Some(parent) = lock_path.parent() {
+        if fs::create_dir_all(parent).is_err() {
+            return None;
+        }
+    }
+
+    for _ in 0..PATH_LOCK_RETRIES {
+        match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&lock_path)
+        {
+            Ok(_) => return Some(PathLockGuard { lock_path }),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                thread::sleep(Duration::from_millis(PATH_LOCK_RETRY_DELAY_MS));
+            }
+            Err(_) => return None,
+        }
+    }
+    None
+}
+
+struct PathLockGuard {
+    lock_path: PathBuf,
+}
+
+impl Drop for PathLockGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.lock_path);
+    }
 }
 
 fn collect_tree_entries(

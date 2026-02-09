@@ -18,6 +18,7 @@ use crate::fileio::{read_file_limited, write_file};
 use crate::keys::{parse_public_keys, verify_keys_digest};
 
 const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
+const MAX_ARCHIVE_UNPACKED_BYTES: u64 = MAX_SKILL_ARCHIVE_BYTES * 4;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SignatureMode {
@@ -173,6 +174,7 @@ fn unpack_archive(bytes: &[u8]) -> Result<Package, String> {
         sbom_raw: None,
         sigstore_bundle_raw: None,
     };
+    let mut total_unpacked_bytes = 0u64;
     for entry in archive
         .entries()
         .map_err(|e| format!("artifact tar read failed: {e}"))?
@@ -182,21 +184,32 @@ fn unpack_archive(bytes: &[u8]) -> Result<Package, String> {
             .path()
             .map_err(|e| format!("artifact tar path failed: {e}"))?;
         let normalized = normalize_path(&path.to_string_lossy())?;
-        let mut raw = Vec::new();
-        entry
-            .read_to_end(&mut raw)
-            .map_err(|e| format!("artifact entry read failed ({normalized}): {e}"))?;
+        let max_entry_bytes = match normalized.as_str() {
+            "manifest.json" => MAX_JSON_BYTES,
+            "skill.wasm" => MAX_WASM_BYTES,
+            "signatures.json" | "sbom.spdx.json" | "sigstore.bundle.json" => MAX_JSON_BYTES,
+            _ => {
+                return Err(format!(
+                    "unexpected archive entry: {normalized} (expected top-level skill package files only)"
+                ));
+            }
+        };
+        let logical_name = format!("artifact entry {normalized}");
+        let raw = read_limited(&mut entry, max_entry_bytes, &logical_name)?;
+        total_unpacked_bytes = total_unpacked_bytes.saturating_add(raw.len() as u64);
+        if total_unpacked_bytes > MAX_ARCHIVE_UNPACKED_BYTES {
+            return Err(format!(
+                "artifact exceeds maximum unpacked size ({} bytes > {} bytes)",
+                total_unpacked_bytes, MAX_ARCHIVE_UNPACKED_BYTES
+            ));
+        }
         match normalized.as_str() {
             "manifest.json" => package.manifest_raw = raw,
             "skill.wasm" => package.wasm_raw = raw,
             "signatures.json" => package.signatures_raw = Some(raw),
             "sbom.spdx.json" => package.sbom_raw = Some(raw),
             "sigstore.bundle.json" => package.sigstore_bundle_raw = Some(raw),
-            _ => {
-                return Err(format!(
-                    "unexpected archive entry: {normalized} (expected top-level skill package files only)"
-                ));
-            }
+            _ => unreachable!("normalized and validated above"),
         }
     }
 

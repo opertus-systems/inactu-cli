@@ -196,9 +196,18 @@ fn render_ide_safe_policy(manifest: &ManifestStub) -> String {
                 "write": ["/tmp/provenact-scratch"]
             }),
             "net": [],
+            "kv": {
+                "read": [],
+                "write": []
+            },
+            "queue": {
+                "publish": [],
+                "consume": []
+            },
             "env": [],
             "exec": false,
-            "time": false
+            "time": false,
+            "random": false
         }
     });
     serde_json::to_string_pretty(&policy).unwrap_or_else(|_| "{}".to_string())
