@@ -10,3 +10,6 @@ pub const MAX_JSON_BYTES: u64 = 1024 * 1024;
 pub const MAX_INPUT_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_SECRET_KEY_BYTES: u64 = 16 * 1024;
 pub const MAX_SKILL_ARCHIVE_BYTES: u64 = 128 * 1024 * 1024;
+pub const MAX_KV_VALUE_BYTES: usize = 1024 * 1024;
+pub const MAX_QUEUE_MESSAGE_BYTES: usize = 256 * 1024;
+pub const MAX_QUEUE_FILE_BYTES: u64 = 8 * 1024 * 1024;

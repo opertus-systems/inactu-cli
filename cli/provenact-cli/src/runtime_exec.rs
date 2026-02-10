@@ -19,12 +19,15 @@ use wasmtime::{
 };
 
 use crate::constants::{
-    WASM_FUEL_LIMIT, WASM_INSTANCES_LIMIT, WASM_MEMORIES_LIMIT, WASM_MEMORY_LIMIT_BYTES,
-    WASM_TABLES_LIMIT, WASM_TABLE_ELEMENTS_LIMIT,
+    MAX_KV_VALUE_BYTES, MAX_QUEUE_FILE_BYTES, MAX_QUEUE_MESSAGE_BYTES, WASM_FUEL_LIMIT,
+    WASM_INSTANCES_LIMIT, WASM_MEMORIES_LIMIT, WASM_MEMORY_LIMIT_BYTES, WASM_TABLES_LIMIT,
+    WASM_TABLE_ELEMENTS_LIMIT,
 };
 
 const PATH_LOCK_RETRIES: usize = 50;
 const PATH_LOCK_RETRY_DELAY_MS: u64 = 10;
+const HTTP_CONNECT_TIMEOUT_SECS: u64 = 5;
+const HTTP_TOTAL_TIMEOUT_SECS: u64 = 10;
 
 struct HostState {
     limits: StoreLimits,
@@ -382,7 +385,12 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 },
                 "net.http",
             )?;
-            let response = match ureq::get(&url).call() {
+            let agent: ureq::Agent = ureq::Agent::config_builder()
+                .timeout_connect(Some(Duration::from_secs(HTTP_CONNECT_TIMEOUT_SECS)))
+                .timeout_global(Some(Duration::from_secs(HTTP_TOTAL_TIMEOUT_SECS)))
+                .build()
+                .into();
+            let response = match agent.get(&url).call() {
                 Ok(v) => v,
                 Err(_) => return Ok(-1),
             };
@@ -426,6 +434,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             else {
                 return Ok(-1);
             };
+            if value.len() > MAX_KV_VALUE_BYTES {
+                return Ok(-1);
+            }
             let path = kv_file_path(&key_bytes);
             if let Some(parent) = path.parent() {
                 if fs::create_dir_all(parent).is_err() {
@@ -510,6 +521,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             else {
                 return Ok(-1);
             };
+            if message.len() > MAX_QUEUE_MESSAGE_BYTES {
+                return Ok(-1);
+            }
             let path = queue_file_path(&topic_bytes);
             if let Some(parent) = path.parent() {
                 if fs::create_dir_all(parent).is_err() {
@@ -521,12 +535,19 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 Some(guard) => guard,
                 None => return Ok(-1),
             };
+            let current_size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+            if current_size > MAX_QUEUE_FILE_BYTES {
+                return Ok(-1);
+            }
             let mut file = match OpenOptions::new().create(true).append(true).open(path) {
                 Ok(f) => f,
                 Err(_) => return Ok(-1),
             };
             let mut line = encoded.into_bytes();
             line.push(b'\n');
+            if current_size.saturating_add(line.len() as u64) > MAX_QUEUE_FILE_BYTES {
+                return Ok(-1);
+            }
             if file.write_all(&line).is_err() {
                 return Ok(-1);
             }
@@ -563,6 +584,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 Some(guard) => guard,
                 None => return Ok(-1),
             };
+            if fs::metadata(&path).map(|m| m.len()).unwrap_or(0) > MAX_QUEUE_FILE_BYTES {
+                return Ok(-1);
+            }
             let file = match OpenOptions::new().read(true).open(&path) {
                 Ok(f) => f,
                 Err(_) => return Ok(-1),

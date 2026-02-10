@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use provenact_verifier::{
     compute_manifest_hash, enforce_capability_ceiling, parse_manifest_json, parse_policy_document,
@@ -19,6 +20,8 @@ use crate::keys::{parse_public_keys, verify_keys_digest};
 
 const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
 const MAX_ARCHIVE_UNPACKED_BYTES: u64 = MAX_SKILL_ARCHIVE_BYTES * 4;
+const HTTP_CONNECT_TIMEOUT_SECS: u64 = 5;
+const HTTP_TOTAL_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SignatureMode {
@@ -139,17 +142,11 @@ fn load_artifact(source: &str, allow_insecure_http: bool) -> Result<Vec<u8>, Str
                     .to_string(),
             );
         }
-        let response = ureq::get(source)
-            .call()
-            .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
-        let mut reader = response.into_body().into_reader();
+        let mut reader = fetch_http_reader(source)?;
         return read_limited(&mut reader, MAX_SKILL_ARCHIVE_BYTES, "artifact");
     }
     if source.starts_with("https://") {
-        let response = ureq::get(source)
-            .call()
-            .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
-        let mut reader = response.into_body().into_reader();
+        let mut reader = fetch_http_reader(source)?;
         return read_limited(&mut reader, MAX_SKILL_ARCHIVE_BYTES, "artifact");
     }
     if source.starts_with("file://") {
@@ -160,6 +157,19 @@ fn load_artifact(source: &str, allow_insecure_http: bool) -> Result<Vec<u8>, Str
         return read_file_limited(&path, MAX_SKILL_ARCHIVE_BYTES, "artifact");
     }
     read_file_limited(Path::new(source), MAX_SKILL_ARCHIVE_BYTES, "artifact")
+}
+
+fn fetch_http_reader(source: &str) -> Result<impl Read, String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(HTTP_CONNECT_TIMEOUT_SECS)))
+        .timeout_global(Some(Duration::from_secs(HTTP_TOTAL_TIMEOUT_SECS)))
+        .build()
+        .into();
+    let response = agent
+        .get(source)
+        .call()
+        .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
+    Ok(response.into_body().into_reader())
 }
 
 fn unpack_archive(bytes: &[u8]) -> Result<Package, String> {
