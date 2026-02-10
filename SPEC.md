@@ -1,42 +1,29 @@
 # Provenact Specification (v0)
 
-This file is the top-level specification index for Provenact v0.
-Normative detail lives under `spec/`.
-Repository scope boundaries are defined in `AGENTS.md`.
-
-## Current Focus
-
-As of 2026-02-06, project focus is to stabilize core skill execution contracts
-before expanding ecosystem surface area.
-
-Priority order:
-1. Native skill contract stability (manifest, policy, receipt).
-2. Conformance coverage and deterministic behavior hardening.
-3. One frictionless golden CLI workflow.
-4. Optional ecosystem adapters only after core contract gates pass.
+This file is the normative index for Provenact contracts.
 
 ## Scope
 
 Provenact is a secure execution substrate for immutable, verifiable skills.
-Provenact includes:
-- skill packaging
+
+In scope:
+- skill packaging and identity
 - signing and verification
 - capability-gated WASM execution
-- execution receipts and auditability
+- deterministic receipts and auditability
 
-Provenact does not include:
-- agents
-- planners
-- schedulers
-- workflow orchestration
-- autonomous decision loops
+Out of scope:
+- planners, schedulers, and orchestration loops
+- autonomous agent control logic
+- long-lived memory or autonomous state machines
 
 ## Normative Sources
 
-The following files are normative for v0:
+The following files define the `v0` contract:
+
 - `spec/v0.md`
 - `spec/v0/skill-manifest.schema.json`
-- `spec/v0/pipeline-dag.schema.json`
+- `spec/v0/pipeline.schema.json`
 - `spec/threat-model.md`
 - `spec/compatibility.md`
 - `spec/hashing.md`
@@ -56,65 +43,16 @@ The following files are normative for v0:
 - `spec/registry/registry.md`
 - `spec/registry/snapshot.schema.json`
 
-## v0 Cryptographic Profile
+## Versioning
 
-- Hash: SHA-256
-- Signature algorithm: Ed25519
-- Digest prefix format: `sha256:<hex>`
-- Registry transport checksum format: `<32 lowercase hex chars>` in registry entry `md5` fields
-- Skill artifact authority: `manifest.artifact`
-- Exact hash/signature preimages: `spec/hashing.md`
+Versioning and compatibility policy is defined in
+`docs/versioning-policy.md`.
 
-## Canonicalization Rules
+## Conformance Artifacts
 
-Any hashed JSON document must be serialized with RFC 8785 (JCS), UTF-8 encoded.
+Deterministic vectors for the normative contract are published in
+`test-vectors/` and enforced by `npm run conformance`.
 
-No implicit fields may be included in hashed payloads.
-Timestamps are excluded from hash inputs unless explicitly stated.
+## Policy Boundary
 
-## Capability Model
-
-Capabilities are deny-by-default and requested in manifest metadata.
-Declared capabilities are not automatically granted.
-Runtime enforcement is mandatory.
-
-## Required Runtime Verification Sequence
-
-Before execution, runtime must:
-1. verify `skill.wasm` hash against `manifest.artifact`
-2. verify signature records in `signatures.json`
-3. enforce local policy against requested capabilities
-4. execute only if checks pass
-
-## Execution Receipts
-
-Each successful execution MUST produce a receipt with at least:
-- artifact hash
-- input hash
-- output hash
-- capabilities used
-- timestamp
-- receipt hash
-
-Receipt hashing must follow the canonicalization rules above.
-Receipt shape is defined by `spec/execution-receipt.schema.json`.
-Failed executions SHOULD emit a best-effort failure transcript outside the
-success receipt schema.
-
-CLI contract: `provenact-cli run` requires `--receipt`; there is no successful run
-path without writing a receipt file.
-
-## v0 Non-Goals
-
-- blockchain anchoring
-- zero-knowledge proofs
-- multi-signer quorum policy logic
-- native non-WASM execution
-- UI orchestration features
-
-## Expansion Gate (Post-v0/v1 Drafts)
-
-New integration surfaces (including adapters) MUST wait until all are true:
-1. Draft schemas for manifest v1 and receipt v1 exist and are reviewable.
-2. Core verification and receipt behavior are covered by conformance vectors.
-3. Golden `pack -> sign -> verify -> run -> receipt-verify` workflow is stable.
+Provenact executes verified skills. Agent orchestration belongs outside this repo.

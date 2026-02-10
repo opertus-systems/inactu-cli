@@ -289,7 +289,150 @@ fn verify_fails_when_require_cosign_without_oci_ref() {
     assert!(!verify.status.success(), "{:?}", verify);
     let stderr = String::from_utf8(verify.stderr).expect("stderr should be utf8");
     assert!(
-        stderr.contains("--oci-ref is required when --require-cosign is set"),
+        stderr.contains("--oci-ref is required when cosign verification is configured"),
+        "stderr was: {stderr}"
+    );
+}
+
+#[test]
+fn verify_fails_when_require_cosign_without_key() {
+    let root = temp_dir("verify_require_cosign_no_key");
+    let wasm_path = root.join("input.wasm");
+    let manifest_path = root.join("input.manifest.json");
+    let bundle_dir = root.join("bundle");
+    let secret_key_path = root.join("signing.key");
+    let keys_path = root.join("public-keys.json");
+
+    let wasm = b"\0asm\x01\0\0\0";
+    write(&wasm_path, wasm);
+    let artifact = sha256_prefixed(wasm);
+    let manifest = format!(
+        "{{\"name\":\"echo.minimal\",\"version\":\"0.1.0\",\"entrypoint\":\"run\",\"artifact\":\"{artifact}\",\"capabilities\":[],\"signers\":[\"alice.dev\"]}}"
+    );
+    write(&manifest_path, manifest.as_bytes());
+
+    let pack = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
+        .args(["pack", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--wasm"])
+        .arg(&wasm_path)
+        .args(["--manifest"])
+        .arg(&manifest_path)
+        .output()
+        .expect("pack should run");
+    assert!(pack.status.success(), "{:?}", pack);
+
+    let signing_key = SigningKey::from_bytes(&[80u8; 32]);
+    write(
+        &secret_key_path,
+        STANDARD.encode(signing_key.to_bytes()).as_bytes(),
+    );
+    let sign = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
+        .args(["sign", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--signer", "alice.dev", "--secret-key"])
+        .arg(&secret_key_path)
+        .output()
+        .expect("sign should run");
+    assert!(sign.status.success(), "{:?}", sign);
+
+    let keys = format!(
+        "{{\"alice.dev\":\"{}\"}}",
+        STANDARD.encode(signing_key.verifying_key().to_bytes())
+    );
+    write(&keys_path, keys.as_bytes());
+
+    let verify = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
+        .args(["verify", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--keys"])
+        .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
+        .args(["--oci-ref", "ghcr.io/acme/echo:0.1.0"])
+        .arg("--require-cosign")
+        .output()
+        .expect("verify should run");
+    assert!(!verify.status.success(), "{:?}", verify);
+    let stderr = String::from_utf8(verify.stderr).expect("stderr should be utf8");
+    assert!(
+        stderr.contains("--cosign-key is required when cosign verification is configured"),
+        "stderr was: {stderr}"
+    );
+}
+
+#[test]
+fn verify_fails_when_require_cosign_without_cert_identity() {
+    let root = temp_dir("verify_require_cosign_no_cert_identity");
+    let wasm_path = root.join("input.wasm");
+    let manifest_path = root.join("input.manifest.json");
+    let bundle_dir = root.join("bundle");
+    let secret_key_path = root.join("signing.key");
+    let keys_path = root.join("public-keys.json");
+    let cosign_pub_path = root.join("cosign.pub");
+
+    let wasm = b"\0asm\x01\0\0\0";
+    write(&wasm_path, wasm);
+    let artifact = sha256_prefixed(wasm);
+    let manifest = format!(
+        "{{\"name\":\"echo.minimal\",\"version\":\"0.1.0\",\"entrypoint\":\"run\",\"artifact\":\"{artifact}\",\"capabilities\":[],\"signers\":[\"alice.dev\"]}}"
+    );
+    write(&manifest_path, manifest.as_bytes());
+
+    let pack = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
+        .args(["pack", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--wasm"])
+        .arg(&wasm_path)
+        .args(["--manifest"])
+        .arg(&manifest_path)
+        .output()
+        .expect("pack should run");
+    assert!(pack.status.success(), "{:?}", pack);
+
+    let signing_key = SigningKey::from_bytes(&[81u8; 32]);
+    write(
+        &secret_key_path,
+        STANDARD.encode(signing_key.to_bytes()).as_bytes(),
+    );
+    let sign = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
+        .args(["sign", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--signer", "alice.dev", "--secret-key"])
+        .arg(&secret_key_path)
+        .output()
+        .expect("sign should run");
+    assert!(sign.status.success(), "{:?}", sign);
+
+    let keys = format!(
+        "{{\"alice.dev\":\"{}\"}}",
+        STANDARD.encode(signing_key.verifying_key().to_bytes())
+    );
+    write(&keys_path, keys.as_bytes());
+    write(&cosign_pub_path, b"dummy cosign public key");
+
+    let verify = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
+        .args(["verify", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--keys"])
+        .arg(&keys_path)
+        .args(["--keys-digest"])
+        .arg(sha256_prefixed(
+            &fs::read(&keys_path).expect("keys should exist"),
+        ))
+        .args(["--oci-ref", "ghcr.io/acme/echo:0.1.0"])
+        .args(["--cosign-key"])
+        .arg(&cosign_pub_path)
+        .arg("--require-cosign")
+        .output()
+        .expect("verify should run");
+    assert!(!verify.status.success(), "{:?}", verify);
+    let stderr = String::from_utf8(verify.stderr).expect("stderr should be utf8");
+    assert!(
+        stderr
+            .contains("--cosign-cert-identity is required when cosign verification is configured"),
         "stderr was: {stderr}"
     );
 }
@@ -302,12 +445,16 @@ fn verify_succeeds_when_cosign_verified() {
     let bundle_dir = root.join("bundle");
     let secret_key_path = root.join("signing.key");
     let keys_path = root.join("public-keys.json");
+    let cosign_pub_path = root.join("cosign.pub");
+    let cert_identity =
+        "https://github.com/acme/provenact/.github/workflows/release.yml@refs/heads/main";
+    let cert_oidc_issuer = "https://token.actions.githubusercontent.com";
     let bin_dir = root.join("bin");
     let cosign_path = bin_dir.join("cosign");
     fs::create_dir_all(&bin_dir).expect("bin dir should exist");
     write(
         &cosign_path,
-        b"#!/bin/sh\nif [ \"$1\" = \"verify\" ] && [ \"$2\" = \"ghcr.io/acme/echo:0.1.0\" ]; then\n  exit 0\nfi\necho \"unexpected cosign args: $*\" >&2\nexit 1\n",
+        b"#!/bin/sh\nif [ \"$1\" = \"verify\" ] && [ \"$2\" = \"--key\" ] && [ \"$3\" = \"$COSIGN_EXPECTED_KEY\" ] && [ \"$4\" = \"--certificate-identity\" ] && [ \"$5\" = \"$COSIGN_EXPECTED_IDENTITY\" ] && [ \"$6\" = \"--certificate-oidc-issuer\" ] && [ \"$7\" = \"$COSIGN_EXPECTED_ISSUER\" ] && [ \"$8\" = \"ghcr.io/acme/echo:0.1.0\" ]; then\n  exit 0\nfi\necho \"unexpected cosign args: $*\" >&2\nexit 1\n",
     );
     #[cfg(unix)]
     {
@@ -354,6 +501,7 @@ fn verify_succeeds_when_cosign_verified() {
         STANDARD.encode(signing_key.verifying_key().to_bytes())
     );
     write(&keys_path, keys.as_bytes());
+    write(&cosign_pub_path, b"dummy cosign public key");
 
     let verify = Command::new(env!("CARGO_BIN_EXE_provenact-cli"))
         .args(["verify", "--bundle"])
@@ -365,7 +513,14 @@ fn verify_succeeds_when_cosign_verified() {
             &fs::read(&keys_path).expect("keys should exist"),
         ))
         .args(["--oci-ref", "ghcr.io/acme/echo:0.1.0"])
+        .args(["--cosign-key"])
+        .arg(&cosign_pub_path)
+        .args(["--cosign-cert-identity", cert_identity])
+        .args(["--cosign-cert-oidc-issuer", cert_oidc_issuer])
         .arg("--require-cosign")
+        .env("COSIGN_EXPECTED_KEY", cosign_pub_path.display().to_string())
+        .env("COSIGN_EXPECTED_IDENTITY", cert_identity)
+        .env("COSIGN_EXPECTED_ISSUER", cert_oidc_issuer)
         .env("PATH", path_with_bin_dir(&bin_dir))
         .output()
         .expect("verify should run");

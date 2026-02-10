@@ -1,8 +1,8 @@
 use std::fs;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::time::Duration;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use provenact_verifier::{
     compute_manifest_hash, enforce_capability_ceiling, parse_manifest_json, parse_policy_document,
