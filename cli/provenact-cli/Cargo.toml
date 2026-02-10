@@ -29,4 +29,5 @@ wasmtime = "41.0.3"
 zstd = "0.13"
 
 [dev-dependencies]
+filetime = "0.2"
 wat = "1"

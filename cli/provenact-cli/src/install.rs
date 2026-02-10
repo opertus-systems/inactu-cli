@@ -1,6 +1,8 @@
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -22,6 +24,9 @@ const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
 const MAX_ARCHIVE_UNPACKED_BYTES: u64 = MAX_SKILL_ARCHIVE_BYTES * 4;
 const HTTP_CONNECT_TIMEOUT_SECS: u64 = 5;
 const HTTP_TOTAL_TIMEOUT_SECS: u64 = 30;
+const INDEX_LOCK_RETRIES: usize = 50;
+const INDEX_LOCK_RETRY_DELAY_MS: u64 = 10;
+const INDEX_LOCK_STALE_SECS: u64 = 120;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SignatureMode {
@@ -163,12 +168,18 @@ fn fetch_http_reader(source: &str) -> Result<impl Read, String> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_connect(Some(Duration::from_secs(HTTP_CONNECT_TIMEOUT_SECS)))
         .timeout_global(Some(Duration::from_secs(HTTP_TOTAL_TIMEOUT_SECS)))
+        .max_redirects(0)
         .build()
         .into();
     let response = agent
         .get(source)
         .call()
         .map_err(|e| format!("failed to fetch artifact from {source}: {e}"))?;
+    if response.status().is_redirection() {
+        return Err(format!(
+            "artifact fetch redirects are not allowed for security reasons: {source}"
+        ));
+    }
     Ok(response.into_body().into_reader())
 }
 
@@ -371,6 +382,7 @@ fn update_index(
         )
     })?;
     let index_path = provenact_home.join("index.json");
+    let _index_lock = acquire_index_lock(provenact_home)?;
     let mut index = if index_path.exists() {
         let raw = read_file_limited(&index_path, MAX_JSON_BYTES, "index.json")?;
         serde_json::from_slice::<Index>(&raw)
@@ -403,7 +415,7 @@ fn update_index(
     }
     let raw =
         serde_json::to_vec_pretty(&index).map_err(|e| format!("index JSON encode failed: {e}"))?;
-    write_file(&index_path, &raw)?;
+    write_file_atomic(&index_path, &raw)?;
     Ok(())
 }
 
@@ -436,4 +448,84 @@ fn read_limited<R: Read>(
 
 pub(crate) fn is_network_artifact_source(source: &str) -> bool {
     source.starts_with("http://") || source.starts_with("https://")
+}
+
+struct IndexLockGuard {
+    lock_path: PathBuf,
+}
+
+impl Drop for IndexLockGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.lock_path);
+    }
+}
+
+fn acquire_index_lock(provenact_home: &Path) -> Result<IndexLockGuard, String> {
+    let lock_path = provenact_home.join("index.json.lock");
+    for _ in 0..INDEX_LOCK_RETRIES {
+        match OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&lock_path)
+        {
+            Ok(_) => return Ok(IndexLockGuard { lock_path }),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                if is_stale_lock(&lock_path) {
+                    let _ = fs::remove_file(&lock_path);
+                    continue;
+                }
+                thread::sleep(Duration::from_millis(INDEX_LOCK_RETRY_DELAY_MS));
+            }
+            Err(err) => {
+                return Err(format!(
+                    "failed to acquire index lock {}: {err}",
+                    lock_path.display()
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "failed to acquire index lock {} after retries",
+        lock_path.display()
+    ))
+}
+
+fn is_stale_lock(lock_path: &Path) -> bool {
+    let Ok(meta) = fs::metadata(lock_path) else {
+        return false;
+    };
+    let Ok(modified) = meta.modified() else {
+        return false;
+    };
+    let Ok(age) = modified.elapsed() else {
+        return false;
+    };
+    age.as_secs() > INDEX_LOCK_STALE_SECS
+}
+
+fn write_file_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("cannot resolve parent directory for {}", path.display()))?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp_path = parent.join(format!(
+        ".{}.tmp.{}.{nonce}",
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("index"),
+        std::process::id()
+    ));
+    write_file(&tmp_path, bytes)?;
+    fs::rename(&tmp_path, path).map_err(|e| {
+        let _ = fs::remove_file(&tmp_path);
+        format!(
+            "failed to replace {} with {}: {e}",
+            path.display(),
+            tmp_path.display()
+        )
+    })?;
+    Ok(())
 }
