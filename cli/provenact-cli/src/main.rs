@@ -41,7 +41,7 @@ use keys::{parse_public_keys, parse_signing_key, verify_keys_digest};
 use preflight::{load_verified_bundle, read_manifest_and_signatures};
 use runtime_exec::execute_wasm;
 
-const USAGE: &str = "usage:\n  provenact-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  provenact-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  provenact-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  provenact-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  provenact-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  provenact-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-insecure-http] [--allow-experimental]\n  provenact-cli export agentskills --agent <claude|codex|cursor> --scope <user|repo|admin>\n  provenact-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref>] [--allow-experimental]\n  provenact-cli verify-receipt --receipt <receipt.json>\n  provenact-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  provenact-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  provenact-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
+const USAGE: &str = "usage:\n  provenact-cli verify --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> [--require-cosign --oci-ref <oci-ref> --cosign-key <cosign.pub> --cosign-cert-identity <identity> --cosign-cert-oidc-issuer <issuer>] [--allow-experimental]\n  provenact-cli inspect --bundle <bundle-dir> [--allow-experimental]\n  provenact-cli pack --bundle <bundle-dir> --wasm <skill.wasm> --manifest <manifest.json> [--allow-experimental]\n  provenact-cli archive --bundle <bundle-dir> --output <skill.tar.zst>\n  provenact-cli sign --bundle <bundle-dir> --signer <signer-id> --secret-key <ed25519-secret-key-file> [--allow-experimental]\n  provenact-cli install --artifact <path|file://...|http(s)://...|oci://...> [--keys <public-keys.json> --keys-digest <sha256:...>] [--policy <policy.{json|yaml}>] [--require-signatures] [--allow-insecure-http] [--allow-experimental]\n  provenact-cli export agentskills --agent <claude|codex|cursor> --scope <user|repo|admin>\n  provenact-cli run --bundle <bundle-dir> --keys <public-keys.json> --keys-digest <sha256:...> --policy <policy.{json|yaml}> --input <input-file> --receipt <receipt.json> [--receipt-format <v0|v1-draft>] [--require-cosign --oci-ref <oci-ref> --cosign-key <cosign.pub> --cosign-cert-identity <identity> --cosign-cert-oidc-issuer <issuer>] [--allow-experimental]\n  provenact-cli verify-receipt --receipt <receipt.json>\n  provenact-cli verify-registry-entry --artifact <artifact-bytes-file> --sha256 <sha256:...> --md5 <32-lowercase-hex>\n  provenact-cli experimental-validate-manifest-v1 --manifest <manifest.json>\n  provenact-cli experimental-validate-receipt-v1 --receipt <receipt.json>";
 const EXPERIMENTAL_SCHEMA_VERSION: &str = "1.0.0-draft";
 const BUNDLE_META_SCHEMA_VERSION: &str = "1.0.0";
 const RECEIPT_TIMESTAMP_STRATEGY_LOCAL: &str = "local_untrusted_unix_seconds";
@@ -129,7 +129,15 @@ fn run_export(args: &[String]) -> Result<(), String> {
 fn run_verify(args: &[String]) -> Result<(), String> {
     let parsed = parse_flags_with_switches(
         args,
-        &["--bundle", "--keys", "--keys-digest", "--oci-ref"],
+        &[
+            "--bundle",
+            "--keys",
+            "--keys-digest",
+            "--oci-ref",
+            "--cosign-key",
+            "--cosign-cert-identity",
+            "--cosign-cert-oidc-issuer",
+        ],
         &["--allow-experimental", "--require-cosign"],
         USAGE,
     )?;
@@ -137,16 +145,22 @@ fn run_verify(args: &[String]) -> Result<(), String> {
     let keys_path = required_path(&parsed, "--keys", USAGE)?;
     let keys_digest = required_string(&parsed, "--keys-digest", USAGE)?;
     let oci_ref = optional_string(&parsed, "--oci-ref");
+    let cosign_key = optional_string(&parsed, "--cosign-key");
+    let cosign_cert_identity = optional_string(&parsed, "--cosign-cert-identity");
+    let cosign_cert_oidc_issuer = optional_string(&parsed, "--cosign-cert-oidc-issuer");
     let require_cosign = has_switch(&parsed, "--require-cosign");
     let allow_experimental = has_switch(&parsed, "--allow-experimental");
-    verify_bundle(
-        &bundle_dir,
-        &keys_path,
-        &keys_digest,
+    verify_bundle(VerifyBundleArgs {
+        bundle_dir,
+        keys_path,
+        keys_digest,
         require_cosign,
-        oci_ref.as_deref(),
+        oci_ref,
+        cosign_key,
+        cosign_cert_identity,
+        cosign_cert_oidc_issuer,
         allow_experimental,
-    )
+    })
 }
 
 fn run_inspect(args: &[String]) -> Result<(), String> {
@@ -260,6 +274,9 @@ fn run_execute(args: &[String]) -> Result<(), String> {
             "--keys",
             "--keys-digest",
             "--oci-ref",
+            "--cosign-key",
+            "--cosign-cert-identity",
+            "--cosign-cert-oidc-issuer",
             "--policy",
             "--input",
             "--receipt",
@@ -272,6 +289,9 @@ fn run_execute(args: &[String]) -> Result<(), String> {
     let keys_path = required_path(&parsed, "--keys", USAGE)?;
     let keys_digest = required_string(&parsed, "--keys-digest", USAGE)?;
     let oci_ref = optional_string(&parsed, "--oci-ref");
+    let cosign_key = optional_string(&parsed, "--cosign-key");
+    let cosign_cert_identity = optional_string(&parsed, "--cosign-cert-identity");
+    let cosign_cert_oidc_issuer = optional_string(&parsed, "--cosign-cert-oidc-issuer");
     let require_cosign = has_switch(&parsed, "--require-cosign");
     let policy_path = required_path(&parsed, "--policy", USAGE)?;
     let input_path = required_path(&parsed, "--input", USAGE)?;
@@ -285,6 +305,9 @@ fn run_execute(args: &[String]) -> Result<(), String> {
         keys_digest,
         require_cosign,
         oci_ref,
+        cosign_key,
+        cosign_cert_identity,
+        cosign_cert_oidc_issuer,
         policy_path,
         input_path,
         receipt_path,
@@ -319,31 +342,71 @@ fn run_validate_receipt_v1_cmd(args: &[String]) -> Result<(), String> {
     validate_receipt_v1_file(&receipt_path)
 }
 
-fn verify_bundle(
-    bundle_dir: &Path,
-    keys_path: &Path,
-    keys_digest: &str,
+struct VerifyBundleArgs {
+    bundle_dir: PathBuf,
+    keys_path: PathBuf,
+    keys_digest: String,
     require_cosign: bool,
-    oci_ref: Option<&str>,
+    oci_ref: Option<String>,
+    cosign_key: Option<String>,
+    cosign_cert_identity: Option<String>,
+    cosign_cert_oidc_issuer: Option<String>,
     allow_experimental: bool,
-) -> Result<(), String> {
+}
+
+fn verify_bundle(args: VerifyBundleArgs) -> Result<(), String> {
+    let VerifyBundleArgs {
+        bundle_dir,
+        keys_path,
+        keys_digest,
+        require_cosign,
+        oci_ref,
+        cosign_key,
+        cosign_cert_identity,
+        cosign_cert_oidc_issuer,
+        allow_experimental,
+    } = args;
     let started = Instant::now();
     let result = (|| {
         let preflight_started = Instant::now();
-        let bundle = load_verified_bundle(bundle_dir)?;
+        let bundle = load_verified_bundle(&bundle_dir)?;
         require_manifest_schema_allowed(&bundle.manifest, allow_experimental)?;
         let preflight_ms = preflight_started.elapsed().as_millis() as u64;
 
         let trust_started = Instant::now();
-        let keys_raw = read_file_limited(keys_path, MAX_JSON_BYTES, "public-keys.json")?;
-        verify_keys_digest(&keys_raw, keys_digest)?;
+        let keys_raw = read_file_limited(&keys_path, MAX_JSON_BYTES, "public-keys.json")?;
+        verify_keys_digest(&keys_raw, &keys_digest)?;
         let public_keys = parse_public_keys(&keys_raw)?;
         verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
-        if require_cosign || oci_ref.is_some() {
-            let Some(ref_value) = oci_ref else {
-                return Err("--oci-ref is required when --require-cosign is set".to_string());
+        if require_cosign
+            || oci_ref.is_some()
+            || cosign_key.is_some()
+            || cosign_cert_identity.is_some()
+            || cosign_cert_oidc_issuer.is_some()
+        {
+            let Some(ref_value) = oci_ref.as_deref() else {
+                return Err(
+                    "--oci-ref is required when cosign verification is configured".to_string(),
+                );
             };
-            verify_cosign_oci_ref(ref_value)?;
+            let Some(cosign_key_path) = cosign_key.as_deref() else {
+                return Err(
+                    "--cosign-key is required when cosign verification is configured".to_string(),
+                );
+            };
+            let Some(cert_identity) = cosign_cert_identity.as_deref() else {
+                return Err(
+                    "--cosign-cert-identity is required when cosign verification is configured"
+                        .to_string(),
+                );
+            };
+            let Some(cert_oidc_issuer) = cosign_cert_oidc_issuer.as_deref() else {
+                return Err(
+                    "--cosign-cert-oidc-issuer is required when cosign verification is configured"
+                        .to_string(),
+                );
+            };
+            verify_cosign_oci_ref(ref_value, cosign_key_path, cert_identity, cert_oidc_issuer)?;
         }
         let trust_ms = trust_started.elapsed().as_millis() as u64;
 
@@ -571,6 +634,9 @@ struct RunBundleArgs {
     keys_digest: String,
     require_cosign: bool,
     oci_ref: Option<String>,
+    cosign_key: Option<String>,
+    cosign_cert_identity: Option<String>,
+    cosign_cert_oidc_issuer: Option<String>,
     policy_path: PathBuf,
     input_path: PathBuf,
     receipt_path: PathBuf,
@@ -585,6 +651,9 @@ fn run_bundle(args: RunBundleArgs) -> Result<(), String> {
         keys_digest,
         require_cosign,
         oci_ref,
+        cosign_key,
+        cosign_cert_identity,
+        cosign_cert_oidc_issuer,
         policy_path,
         input_path,
         receipt_path,
@@ -612,11 +681,35 @@ fn run_bundle(args: RunBundleArgs) -> Result<(), String> {
 
         let public_keys = parse_public_keys(&keys_raw)?;
         verify_signatures(&bundle.signatures, &public_keys).map_err(|e| e.to_string())?;
-        if require_cosign || oci_ref.is_some() {
+        if require_cosign
+            || oci_ref.is_some()
+            || cosign_key.is_some()
+            || cosign_cert_identity.is_some()
+            || cosign_cert_oidc_issuer.is_some()
+        {
             let Some(ref_value) = oci_ref.as_deref() else {
-                return Err("--oci-ref is required when --require-cosign is set".to_string());
+                return Err(
+                    "--oci-ref is required when cosign verification is configured".to_string(),
+                );
             };
-            verify_cosign_oci_ref(ref_value)?;
+            let Some(cosign_key_path) = cosign_key.as_deref() else {
+                return Err(
+                    "--cosign-key is required when cosign verification is configured".to_string(),
+                );
+            };
+            let Some(cert_identity) = cosign_cert_identity.as_deref() else {
+                return Err(
+                    "--cosign-cert-identity is required when cosign verification is configured"
+                        .to_string(),
+                );
+            };
+            let Some(cert_oidc_issuer) = cosign_cert_oidc_issuer.as_deref() else {
+                return Err(
+                    "--cosign-cert-oidc-issuer is required when cosign verification is configured"
+                        .to_string(),
+                );
+            };
+            verify_cosign_oci_ref(ref_value, cosign_key_path, cert_identity, cert_oidc_issuer)?;
         }
 
         let policy = parse_policy_document(&policy_raw).map_err(|e| e.to_string())?;
@@ -1003,9 +1096,23 @@ fn emit_obs(event: &str, fields: Vec<(&str, Value)>) {
     eprintln!("{}", Value::Object(record));
 }
 
-fn verify_cosign_oci_ref(oci_ref: &str) -> Result<(), String> {
+fn verify_cosign_oci_ref(
+    oci_ref: &str,
+    cosign_key: &str,
+    cert_identity: &str,
+    cert_oidc_issuer: &str,
+) -> Result<(), String> {
     let output = Command::new("cosign")
-        .args(["verify", oci_ref])
+        .args([
+            "verify",
+            "--key",
+            cosign_key,
+            "--certificate-identity",
+            cert_identity,
+            "--certificate-oidc-issuer",
+            cert_oidc_issuer,
+            oci_ref,
+        ])
         .output()
         .map_err(|e| format!("cosign verify invocation failed: {e}"))?;
     if !output.status.success() {
