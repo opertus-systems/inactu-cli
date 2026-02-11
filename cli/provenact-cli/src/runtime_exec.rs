@@ -236,17 +236,24 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let Some(path_norm) = normalize_abs_path(&path) else {
                 return Ok(-1);
             };
+            let path_buf = PathBuf::from(&path_norm);
+            let Some(path_resolved) = resolve_path_for_prefix_check(&path_buf, false) else {
+                return Ok(-1);
+            };
             require_capability(
                 &mut caller,
                 "fs.read",
                 |value| {
                     normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&path_norm, &p))
+                        .and_then(|p| {
+                            resolve_path_for_prefix_check(Path::new(&p), true)
+                                .map(|prefix| path_buf_within_prefix(&path_resolved, &prefix))
+                        })
                         .unwrap_or(false)
                 },
                 "fs.read",
             )?;
-            let data = match fs::read(&path_norm) {
+            let data = match fs::read(&path_resolved) {
                 Ok(v) => v,
                 Err(_) => return Ok(-1),
             };
@@ -277,19 +284,29 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let Some(root_norm) = normalize_abs_path(&root) else {
                 return Ok(-1);
             };
+            let root_buf = PathBuf::from(&root_norm);
+            let Some(root_resolved) = resolve_path_for_prefix_check(&root_buf, false) else {
+                return Ok(-1);
+            };
+            if !root_resolved.is_dir() {
+                return Ok(-1);
+            }
             require_capability(
                 &mut caller,
                 "fs.read",
                 |value| {
                     normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&root_norm, &p))
+                        .and_then(|p| {
+                            resolve_path_for_prefix_check(Path::new(&p), true)
+                                .map(|prefix| path_buf_within_prefix(&root_resolved, &prefix))
+                        })
                         .unwrap_or(false)
                 },
                 "fs.read",
             )?;
 
             let mut entries = Vec::new();
-            collect_tree_entries(Path::new(&root_norm), Path::new(&root_norm), &mut entries)?;
+            collect_tree_entries(&root_resolved, &root_resolved, &mut entries)?;
             entries.sort_by(|a, b| {
                 let ap = a["path"].as_str().unwrap_or_default();
                 let bp = b["path"].as_str().unwrap_or_default();
@@ -329,12 +346,19 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let Some(path_norm) = normalize_abs_path(&path) else {
                 return Ok(-1);
             };
+            let path_buf = PathBuf::from(&path_norm);
+            let Some(path_resolved) = resolve_path_for_prefix_check(&path_buf, true) else {
+                return Ok(-1);
+            };
             require_capability(
                 &mut caller,
                 "fs.write",
                 |value| {
                     normalize_abs_path(value)
-                        .map(|p| path_within_prefix(&path_norm, &p))
+                        .and_then(|p| {
+                            resolve_path_for_prefix_check(Path::new(&p), true)
+                                .map(|prefix| path_buf_within_prefix(&path_resolved, &prefix))
+                        })
                         .unwrap_or(false)
                 },
                 "fs.write",
@@ -343,12 +367,12 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             else {
                 return Ok(-1);
             };
-            if let Some(parent) = Path::new(&path_norm).parent() {
+            if let Some(parent) = path_resolved.parent() {
                 if fs::create_dir_all(parent).is_err() {
                     return Ok(-1);
                 }
             }
-            if fs::write(&path_norm, &bytes).is_err() {
+            if fs::write(&path_resolved, &bytes).is_err() {
                 return Ok(-1);
             }
             Ok(0)
@@ -704,6 +728,40 @@ fn path_within_prefix(path: &str, prefix: &str) -> bool {
         || path
             .strip_prefix(prefix)
             .is_some_and(|rest| rest.starts_with('/'))
+}
+
+fn resolve_path_for_prefix_check(path: &Path, allow_missing_leaf: bool) -> Option<PathBuf> {
+    if !path.is_absolute() {
+        return None;
+    }
+    let mut probe = path.to_path_buf();
+    let mut suffix = Vec::<OsString>::new();
+    loop {
+        match fs::canonicalize(&probe) {
+            Ok(resolved) => {
+                if !allow_missing_leaf && !suffix.is_empty() {
+                    return None;
+                }
+                let mut full = resolved;
+                for part in suffix.iter().rev() {
+                    full.push(part);
+                }
+                return Some(full);
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                let name = probe.file_name()?.to_os_string();
+                suffix.push(name);
+                if !probe.pop() {
+                    return None;
+                }
+            }
+            Err(_) => return None,
+        }
+    }
+}
+
+fn path_buf_within_prefix(path: &Path, prefix: &Path) -> bool {
+    path == prefix || path.strip_prefix(prefix).is_ok()
 }
 
 fn normalize_uri_path(path: &str) -> Option<String> {

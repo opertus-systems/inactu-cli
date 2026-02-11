@@ -93,6 +93,28 @@ fn run_bundle(
     receipt_path: &Path,
     envs: &[(&str, &Path)],
 ) {
+    let out = run_bundle_command(bundle, policy_path, input_path, receipt_path, envs);
+    assert!(out.status.success(), "{out:?}");
+}
+
+fn run_bundle_expect_failure(
+    bundle: &BundleCtx,
+    policy_path: &Path,
+    input_path: &Path,
+    receipt_path: &Path,
+    envs: &[(&str, &Path)],
+) {
+    let out = run_bundle_command(bundle, policy_path, input_path, receipt_path, envs);
+    assert!(!out.status.success(), "{out:?}");
+}
+
+fn run_bundle_command(
+    bundle: &BundleCtx,
+    policy_path: &Path,
+    input_path: &Path,
+    receipt_path: &Path,
+    envs: &[(&str, &Path)],
+) -> std::process::Output {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_provenact-cli"));
     cmd.args(["run", "--bundle"])
         .arg(&bundle.bundle_dir)
@@ -111,8 +133,7 @@ fn run_bundle(
     for (k, v) in envs {
         cmd.env(k, v);
     }
-    let out = cmd.output().expect("run should execute");
-    assert!(out.status.success(), "{out:?}");
+    cmd.output().expect("run should execute")
 }
 
 #[test]
@@ -225,6 +246,174 @@ fn hostcalls_fs_roundtrip_receipts() {
         parse_receipt_json(&fs::read(&receipt_read).expect("receipt read")).expect("receipt parse");
     assert_eq!(receipt.outputs_hash, sha256_prefixed(b"hello-fs"));
     assert_eq!(receipt.caps_used, vec!["fs.read".to_string()]);
+}
+
+#[cfg(unix)]
+#[test]
+fn hostcalls_fs_read_blocks_symlink_escape() {
+    let root = temp_dir("hostcalls_fs_read_symlink_escape");
+    let allowed_root = root.join("allowed");
+    let outside_root = root.join("outside");
+    fs::create_dir_all(&allowed_root).expect("allowed dir");
+    fs::create_dir_all(&outside_root).expect("outside dir");
+    let secret_path = outside_root.join("secret.txt");
+    write(&secret_path, b"top-secret");
+    std::os::unix::fs::symlink(&secret_path, allowed_root.join("leak.txt")).expect("symlink");
+
+    let wat = r#"(module
+  (import "provenact" "fs_read_file" (func $fs_read_file (param i32 i32 i32 i32) (result i32)))
+  (import "provenact" "output_write" (func $output_write (param i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0) "SYMLINK_PATH_PLACEHOLDER")
+  (data (i32.const 256) "denied")
+  (func (export "run") (result i32)
+    (local $n i32)
+    i32.const 0
+    i32.const PATH_LEN_PLACEHOLDER
+    i32.const 1024
+    i32.const 4096
+    call $fs_read_file
+    local.set $n
+    local.get $n
+    i32.const 0
+    i32.lt_s
+    if
+      i32.const 256
+      i32.const 6
+      call $output_write
+      drop
+      i32.const 0
+      return
+    end
+    i32.const 1024
+    local.get $n
+    call $output_write
+    drop
+    i32.const 0
+  )
+)"#;
+    let symlink_path = allowed_root.join("leak.txt").display().to_string();
+    let wat = wat
+        .replace("SYMLINK_PATH_PLACEHOLDER", &symlink_path)
+        .replace("PATH_LEN_PLACEHOLDER", &symlink_path.len().to_string());
+    let bundle_ctx = create_bundle(
+        &root,
+        "fs-read-symlink-escape",
+        &wat,
+        json!([{"kind":"fs.read","value":allowed_root.display().to_string()}]),
+    );
+
+    let policy = json!({
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {
+        "fs": {"read": [allowed_root.display().to_string()]}
+      }
+    });
+    let policy_path = root.join("policy.json");
+    write(
+        &policy_path,
+        serde_json::to_vec_pretty(&policy)
+            .expect("policy serialize")
+            .as_slice(),
+    );
+
+    let input_path = root.join("in.txt");
+    write(&input_path, b"");
+    let receipt_path = root.join("receipt.json");
+    run_bundle_expect_failure(&bundle_ctx, &policy_path, &input_path, &receipt_path, &[]);
+}
+
+#[cfg(unix)]
+#[test]
+fn hostcalls_fs_write_blocks_symlink_escape() {
+    let root = temp_dir("hostcalls_fs_write_symlink_escape");
+    let allowed_root = root.join("allowed");
+    let outside_root = root.join("outside");
+    fs::create_dir_all(&allowed_root).expect("allowed dir");
+    fs::create_dir_all(&outside_root).expect("outside dir");
+    let target_path = outside_root.join("target.txt");
+    write(&target_path, b"original");
+    std::os::unix::fs::symlink(&target_path, allowed_root.join("sink.txt")).expect("symlink");
+
+    let wat = r#"(module
+  (import "provenact" "input_len" (func $input_len (result i32)))
+  (import "provenact" "input_read" (func $input_read (param i32 i32 i32) (result i32)))
+  (import "provenact" "fs_write_file" (func $fs_write_file (param i32 i32 i32 i32) (result i32)))
+  (import "provenact" "output_write" (func $output_write (param i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0) "SYMLINK_PATH_PLACEHOLDER")
+  (data (i32.const 256) "denied")
+  (data (i32.const 320) "ok")
+  (func (export "run") (result i32)
+    (local $n i32)
+    (local $rc i32)
+    call $input_len
+    local.set $n
+    i32.const 1024
+    i32.const 0
+    local.get $n
+    call $input_read
+    drop
+    i32.const 0
+    i32.const PATH_LEN_PLACEHOLDER
+    i32.const 1024
+    local.get $n
+    call $fs_write_file
+    local.set $rc
+    local.get $rc
+    i32.const 0
+    i32.lt_s
+    if
+      i32.const 256
+      i32.const 6
+      call $output_write
+      drop
+      i32.const 0
+      return
+    end
+    i32.const 320
+    i32.const 2
+    call $output_write
+    drop
+    i32.const 0
+  )
+)"#;
+    let symlink_path = allowed_root.join("sink.txt").display().to_string();
+    let wat = wat
+        .replace("SYMLINK_PATH_PLACEHOLDER", &symlink_path)
+        .replace("PATH_LEN_PLACEHOLDER", &symlink_path.len().to_string());
+    let bundle_ctx = create_bundle(
+        &root,
+        "fs-write-symlink-escape",
+        &wat,
+        json!([{"kind":"fs.write","value":allowed_root.display().to_string()}]),
+    );
+
+    let policy = json!({
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {
+        "fs": {"write": [allowed_root.display().to_string()]}
+      }
+    });
+    let policy_path = root.join("policy.json");
+    write(
+        &policy_path,
+        serde_json::to_vec_pretty(&policy)
+            .expect("policy serialize")
+            .as_slice(),
+    );
+
+    let input_path = root.join("in.txt");
+    write(&input_path, b"new-value");
+    let receipt_path = root.join("receipt.json");
+    run_bundle_expect_failure(&bundle_ctx, &policy_path, &input_path, &receipt_path, &[]);
+    assert_eq!(
+        fs::read(&target_path).expect("target read"),
+        b"original",
+        "symlink target must remain unchanged"
+    );
 }
 
 #[test]
