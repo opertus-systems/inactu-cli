@@ -76,6 +76,7 @@ pub struct PipelineDagV0 {
     pub pipeline_id: String,
     pub nodes: Vec<PipelineNodeV0>,
     pub edges: Vec<PipelineEdgeV0>,
+    pub input_mapping: Vec<InputMappingRuleV0>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_policy: Option<RunPolicyV0>,
 }
@@ -118,6 +119,15 @@ pub struct PipelineEdgeV0 {
 #[serde(deny_unknown_fields)]
 pub struct MappingRuleV0 {
     pub from_path: String,
+    pub to_path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InputMappingRuleV0 {
+    pub from: String,
+    pub from_path: String,
+    pub to: String,
     pub to_path: String,
 }
 
@@ -383,6 +393,29 @@ pub fn parse_pipeline_v0_json(bytes: &[u8]) -> Result<PipelineDagV0, VerifyError
             .or_default()
             .push(edge.to.as_str());
         *inbound_count.entry(edge.to.as_str()).or_insert(0usize) += 1;
+    }
+
+    for rule in &pipeline.input_mapping {
+        if rule.from != "input" && rule.from != "context" {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("input_mapping has unsupported source: {}", rule.from),
+            });
+        }
+        if !is_json_path_subset(&rule.from_path) {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("unsupported input_mapping.from_path: {}", rule.from_path),
+            });
+        }
+        if !node_ids.contains(rule.to.as_str()) {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("input_mapping.to references unknown node: {}", rule.to),
+            });
+        }
+        if !is_json_path_subset(&rule.to_path) {
+            return Err(VerifyError::InvalidV0Pipeline {
+                reason: format!("unsupported input_mapping.to_path: {}", rule.to_path),
+            });
+        }
     }
 
     if let Some(policy) = &pipeline.run_policy {
