@@ -1053,7 +1053,16 @@ fn path_within_prefix(path: &str, prefix: &str) -> bool {
 
 fn normalize_uri_path(path: &str) -> Option<String> {
     let raw = if path.is_empty() { "/" } else { path };
+    if raw.contains('\\') || contains_pct_encoded_triplet(raw) {
+        return None;
+    }
     normalize_abs_path(raw)
+}
+
+fn contains_pct_encoded_triplet(value: &str) -> bool {
+    value.as_bytes().windows(3).any(|window| {
+        window[0] == b'%' && window[1].is_ascii_hexdigit() && window[2].is_ascii_hexdigit()
+    })
 }
 
 fn net_uri_within_prefix(requested: &Url, allowed: &Url) -> bool {
@@ -1139,7 +1148,7 @@ fn validate_policy_constraints(policy: &Policy) -> Result<(), VerifyError> {
             normalize_uri_path(parsed.path()).is_none()
         }) {
             return Err(VerifyError::PolicyConstraint(
-                "capability_ceiling.net items must be absolute authority URIs without query/fragment and with normalized paths".to_string(),
+                "capability_ceiling.net items must be absolute authority URIs without query/fragment, percent-encoded path bytes, and with normalized paths".to_string(),
             ));
         }
         if has_duplicates(net) {
@@ -1722,12 +1731,53 @@ capability_ceiling:
     }
 
     #[test]
+    fn denies_net_capability_with_percent_encoded_path_bytes() {
+        let policy = Policy {
+            version: 1,
+            trusted_signers: vec!["alice.dev".to_string()],
+            capability_ceiling: CapabilityCeiling {
+                fs: None,
+                net: Some(vec!["https://api.example.com/v1".to_string()]),
+                kv: None,
+                queue: None,
+                env: None,
+                exec: Some(false),
+                time: Some(false),
+                random: Some(false),
+            },
+        };
+        let requested = vec![Capability {
+            kind: "net.http".to_string(),
+            value: "https://api.example.com/v1/%2f..%2fadmin".to_string(),
+        }];
+        assert!(matches!(
+            enforce_capability_ceiling(&requested, &policy),
+            Err(VerifyError::CapabilityDenied(_))
+        ));
+    }
+
+    #[test]
     fn denies_policy_net_prefix_with_query_or_fragment() {
         let raw = br#"{
           "version": 1,
           "trusted_signers": ["alice.dev"],
           "capability_ceiling": {
             "net": ["https://api.example.com/v1?token=abc"]
+          }
+        }"#;
+        assert!(matches!(
+            parse_policy_document(raw),
+            Err(VerifyError::PolicyConstraint(_))
+        ));
+    }
+
+    #[test]
+    fn denies_policy_net_prefix_with_percent_encoded_path() {
+        let raw = br#"{
+          "version": 1,
+          "trusted_signers": ["alice.dev"],
+          "capability_ceiling": {
+            "net": ["https://api.example.com/v1/%2f..%2fadmin"]
           }
         }"#;
         assert!(matches!(

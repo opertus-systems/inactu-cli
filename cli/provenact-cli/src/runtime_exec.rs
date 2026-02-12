@@ -818,7 +818,16 @@ fn path_buf_within_prefix(path: &Path, prefix: &Path) -> bool {
 
 fn normalize_uri_path(path: &str) -> Option<String> {
     let raw = if path.is_empty() { "/" } else { path };
+    if raw.contains('\\') || contains_pct_encoded_triplet(raw) {
+        return None;
+    }
     normalize_abs_path(raw)
+}
+
+fn contains_pct_encoded_triplet(value: &str) -> bool {
+    value.as_bytes().windows(3).any(|window| {
+        window[0] == b'%' && window[1].is_ascii_hexdigit() && window[2].is_ascii_hexdigit()
+    })
 }
 
 fn net_uri_within_prefix(requested: &Url, allowed: &Url) -> bool {
@@ -1004,4 +1013,15 @@ fn collect_tree_entries(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_uri_path_rejects_percent_encoded_bytes() {
+        assert!(normalize_uri_path("/v1/%2f..%2fadmin").is_none());
+        assert!(normalize_uri_path("/v1/%20file").is_none());
+    }
 }

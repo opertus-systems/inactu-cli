@@ -8,7 +8,7 @@
         "read": ["/data"],
         "write": ["/tmp"]
       },
-      "net": ["https://api.open-meteo.com"],
+      "net": ["https://api.open-meteo.com/v1"],
       "env": ["HOME", "PATH"],
       "exec": false,
       "time": false
@@ -26,6 +26,10 @@
     {
       "capability": {"kind": "net.http", "value": "https://api.open-meteo.com/v1/forecast"},
       "expect": "allow"
+    },
+    {
+      "capability": {"kind": "net.http", "value": "https://api.open-meteo.com/v1/%2f..%2fadmin"},
+      "expect": "deny"
     },
     {
       "capability": {"kind": "net.http", "value": "https://api.open-meteo.com.evil.tld/v1/forecast"},
