@@ -1,9 +1,10 @@
 # Spec
 
-This directory contains normative v0 definitions for Provenact.
+This directory contains normative v0 definitions for Provenact plus legacy
+reference material.
 
-- `v0.md` - composable skills execution contract and locked v0 decisions
-- `v0/` - v0 composable skill and pipeline schemas
+- `v0.md` - legacy composable-skills draft (non-normative reference)
+- `v0/` - legacy composable skill/pipeline schemas (non-normative reference)
 - `threat-model.md` - trust assumptions, goals, and non-goals
 - `compatibility.md` - stable-vs-experimental compatibility contract
 - `hashing.md` - canonical hashing and signature preimage rules

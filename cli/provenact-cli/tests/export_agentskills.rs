@@ -23,7 +23,7 @@ fn make_index_and_store(base: &Path) -> (std::path::PathBuf, String, std::path::
         "artifact": digest,
         "capabilities": [
             {"kind": "fs.read", "value": "/data/input"},
-            {"kind": "net", "value": "https://example.com/api"}
+            {"kind": "net.http", "value": "https://example.com/api"}
         ],
         "signers": ["alice.dev"]
     });

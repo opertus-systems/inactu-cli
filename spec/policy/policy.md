@@ -30,13 +30,21 @@ runtime in v0.
     requested access mode.
 - `net`:
   - List of allowed absolute URI prefixes.
-  - Requested network destinations MUST match one allowed prefix.
+  - Requested `net.http` destinations MUST match one allowed prefix.
 - `env`:
   - Exact allowlist of environment variable names.
 - `exec`:
-  - Boolean gate for downstream execution capability.
+  - Boolean gate for `exec` and `exec.safe` capabilities.
 - `time`:
-  - Boolean gate for time access capability.
+  - Boolean gate for `time.now` capability.
+- `random`:
+  - Boolean gate for `random.bytes` capability.
+- `kv`:
+  - `read` and `write` are exact-key allowlists.
+  - `*` in an allowlist grants all keys for that operation.
+- `queue`:
+  - `publish` and `consume` are exact-topic allowlists.
+  - `*` in an allowlist grants all topics for that operation.
 
 ## Validation and Enforcement
 

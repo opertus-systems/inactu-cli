@@ -56,12 +56,12 @@ v0 runtime profile note:
 - `kv_put(key_ptr: i32, key_len: i32, val_ptr: i32, val_len: i32) -> i32`
   - Stores key/value bytes in local runtime KV storage.
   - Requires declared capability kind `kv.write`.
-  - Records `caps_used` entry: `kv.put`.
+  - Records `caps_used` entry: `kv.write`.
 
 - `kv_get(key_ptr: i32, key_len: i32, out_ptr: i32, out_len: i32) -> i32`
   - Reads key/value bytes from local runtime KV storage.
   - Requires declared capability kind `kv.read`.
-  - Records `caps_used` entry: `kv.get`.
+  - Records `caps_used` entry: `kv.read`.
 
 - `queue_publish(topic_ptr: i32, topic_len: i32, msg_ptr: i32, msg_len: i32) -> i32`
   - Appends message bytes to local queue topic.
@@ -85,7 +85,8 @@ v0 runtime profile note:
 
 `core/verifier` maps additional manifest capability kinds for policy ceiling checks:
 - `net.http` uses existing `capability_ceiling.net` URI-prefix semantics.
-- `time.now` and `random.bytes` use existing `capability_ceiling.time` gate.
+- `time.now` uses `capability_ceiling.time`.
+- `random.bytes` uses `capability_ceiling.random`.
 - `kv.read` / `kv.write` use `capability_ceiling.kv`.
 - `queue.publish` / `queue.consume` use `capability_ceiling.queue`.
 

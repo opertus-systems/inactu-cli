@@ -57,7 +57,7 @@ cat > "$DENY_DIR/manifest-deny.json" <<'JSON'
   "artifact": "sha256:c9e2d2c87ed55e68710f8ba626e6787518a9d544e6502c24d6a319631e15590a",
   "capabilities": [
     {
-      "kind": "net",
+      "kind": "net.http",
       "value": "https://example.com/api"
     }
   ],

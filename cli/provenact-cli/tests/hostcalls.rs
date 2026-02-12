@@ -5,7 +5,10 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
+use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use common::{temp_dir, write};
@@ -614,7 +617,7 @@ fn hostcalls_kv_roundtrip_receipts() {
     let receipt = parse_receipt_json(&fs::read(&receipt_get_path).expect("receipt read"))
         .expect("receipt parse");
     assert_eq!(receipt.outputs_hash, sha256_prefixed(b"kv-value-1"));
-    assert_eq!(receipt.caps_used, vec!["kv.get".to_string()]);
+    assert_eq!(receipt.caps_used, vec!["kv.read".to_string()]);
 }
 
 #[test]
@@ -804,6 +807,89 @@ fn hostcalls_http_fetch_receipt_and_caps_used() {
     assert_eq!(receipt.caps_used, vec!["net.http".to_string()]);
 }
 
+#[test]
+fn hostcalls_http_fetch_blocks_redirects() {
+    let root = temp_dir("hostcalls_http_redirect");
+    let (url, target_hit, redirect_handle, target_handle) =
+        spawn_http_redirect_fixture_once(b"redirect-target".to_vec());
+
+    let http_wat = r#"(module
+  (import "provenact" "input_len" (func $input_len (result i32)))
+  (import "provenact" "input_read" (func $input_read (param i32 i32 i32) (result i32)))
+  (import "provenact" "http_fetch" (func $http_fetch (param i32 i32 i32 i32) (result i32)))
+  (import "provenact" "output_write" (func $output_write (param i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (func (export "run") (result i32)
+    (local $url_len i32)
+    (local $n i32)
+    call $input_len
+    local.set $url_len
+    i32.const 0
+    i32.const 0
+    local.get $url_len
+    call $input_read
+    drop
+    i32.const 0
+    local.get $url_len
+    i32.const 2048
+    i32.const 16384
+    call $http_fetch
+    local.set $n
+    local.get $n
+    i32.const 0
+    i32.lt_s
+    if
+      i32.const 1
+      return
+    end
+    i32.const 2048
+    local.get $n
+    call $output_write
+    drop
+    i32.const 0
+  )
+)"#;
+
+    let bundle_ctx = create_bundle(
+        &root,
+        "http-fetch-redirect",
+        http_wat,
+        json!([{"kind":"net.http","value": url.clone()}]),
+    );
+    let policy = json!({
+      "version": 1,
+      "trusted_signers": ["alice.dev"],
+      "capability_ceiling": {"net": [url.clone()]}
+    });
+    let policy_path = root.join("policy.json");
+    write(
+        &policy_path,
+        serde_json::to_vec_pretty(&policy)
+            .expect("policy serialize")
+            .as_slice(),
+    );
+
+    let input_path = root.join("in-url.txt");
+    write(&input_path, url.as_bytes());
+    let receipt_path = root.join("receipt-http-redirect.json");
+    run_bundle(&bundle_ctx, &policy_path, &input_path, &receipt_path, &[]);
+
+    redirect_handle
+        .join()
+        .expect("redirect server thread should finish");
+    target_handle
+        .join()
+        .expect("target server thread should finish");
+    let receipt =
+        parse_receipt_json(&fs::read(&receipt_path).expect("receipt read")).expect("receipt parse");
+    assert_eq!(receipt.outputs_hash, sha256_prefixed(b"1"));
+    assert_eq!(receipt.caps_used, vec!["net.http".to_string()]);
+    assert!(
+        !target_hit.load(Ordering::SeqCst),
+        "http_fetch must not follow redirects"
+    );
+}
+
 fn spawn_http_server_once(body: Vec<u8>) -> (String, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind should succeed");
     let addr = listener.local_addr().expect("local addr");
@@ -823,4 +909,71 @@ fn spawn_http_server_once(body: Vec<u8>) -> (String, thread::JoinHandle<()>) {
         stream.flush().expect("flush should succeed");
     });
     (url, handle)
+}
+
+fn spawn_http_redirect_fixture_once(
+    body: Vec<u8>,
+) -> (
+    String,
+    Arc<AtomicBool>,
+    thread::JoinHandle<()>,
+    thread::JoinHandle<()>,
+) {
+    let target_listener = TcpListener::bind("127.0.0.1:0").expect("bind should succeed");
+    let target_addr = target_listener.local_addr().expect("local addr");
+    let target_url = format!("http://{target_addr}/target");
+
+    let redirect_listener = TcpListener::bind("127.0.0.1:0").expect("bind should succeed");
+    let redirect_addr = redirect_listener.local_addr().expect("local addr");
+    let redirect_url = format!("http://{redirect_addr}/");
+
+    let target_hit = Arc::new(AtomicBool::new(false));
+    let target_hit_clone = Arc::clone(&target_hit);
+    let target_handle = thread::spawn(move || {
+        target_listener
+            .set_nonblocking(true)
+            .expect("set nonblocking should succeed");
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match target_listener.accept() {
+                Ok((mut stream, _)) => {
+                    target_hit_clone.store(true, Ordering::SeqCst);
+                    let mut req = [0u8; 1024];
+                    let _ = stream.read(&mut req);
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    stream
+                        .write_all(response.as_bytes())
+                        .expect("write headers should succeed");
+                    stream.write_all(&body).expect("write body should succeed");
+                    stream.flush().expect("flush should succeed");
+                    break;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        break;
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let redirect_handle = thread::spawn(move || {
+        let (mut stream, _) = redirect_listener.accept().expect("accept should succeed");
+        let mut req = [0u8; 1024];
+        let _ = stream.read(&mut req);
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: {target_url}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        stream
+            .write_all(response.as_bytes())
+            .expect("write redirect should succeed");
+        stream.flush().expect("flush should succeed");
+    });
+
+    (redirect_url, target_hit, redirect_handle, target_handle)
 }

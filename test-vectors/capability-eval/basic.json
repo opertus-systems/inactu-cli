@@ -24,11 +24,11 @@
       "expect": "allow"
     },
     {
-      "capability": {"kind": "net", "value": "https://api.open-meteo.com/v1/forecast"},
+      "capability": {"kind": "net.http", "value": "https://api.open-meteo.com/v1/forecast"},
       "expect": "allow"
     },
     {
-      "capability": {"kind": "net", "value": "https://api.open-meteo.com.evil.tld/v1/forecast"},
+      "capability": {"kind": "net.http", "value": "https://api.open-meteo.com.evil.tld/v1/forecast"},
       "expect": "deny"
     },
     {
@@ -40,7 +40,7 @@
       "expect": "deny"
     },
     {
-      "capability": {"kind": "net", "value": "https://evil.example.com"},
+      "capability": {"kind": "net.http", "value": "https://evil.example.com"},
       "expect": "deny"
     },
     {
@@ -48,7 +48,7 @@
       "expect": "deny"
     },
     {
-      "capability": {"kind": "time", "value": "true"},
+      "capability": {"kind": "time.now", "value": "utc"},
       "expect": "deny"
     },
     {

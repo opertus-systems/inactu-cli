@@ -945,7 +945,7 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
                     .unwrap_or(false)
             })
         }
-        "net" | "net.http" => {
+        "net.http" => {
             let Ok(requested) = Url::parse(&capability.value) else {
                 return false;
             };
@@ -970,7 +970,6 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
         }
         "exec" => capability.value == "true" && ceiling.exec.unwrap_or(false),
         "exec.safe" => !capability.value.is_empty() && ceiling.exec.unwrap_or(false),
-        "time" => capability.value == "true" && ceiling.time.unwrap_or(false),
         "time.now" => !capability.value.is_empty() && ceiling.time.unwrap_or(false),
         "random.bytes" => !capability.value.is_empty() && ceiling.random.unwrap_or(false),
         "kv.read" => {
@@ -1219,7 +1218,7 @@ mod tests {
             "version":"1.0.0",
             "entrypoint":"run",
             "artifact":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "capabilities":[{"kind":"net","value":"https://example.com"}],
+            "capabilities":[{"kind":"net.http","value":"https://example.com"}],
             "signers":["alice.dev"]
         }"#;
         let manifest = parse_manifest_json(raw).expect("manifest should parse");
@@ -1687,7 +1686,7 @@ capability_ceiling:
             },
         };
         let requested = vec![Capability {
-            kind: "net".to_string(),
+            kind: "net.http".to_string(),
             value: "https://evil.example.com/path".to_string(),
         }];
         assert!(matches!(
@@ -1713,7 +1712,7 @@ capability_ceiling:
             },
         };
         let requested = vec![Capability {
-            kind: "net".to_string(),
+            kind: "net.http".to_string(),
             value: "https://api.example.com.evil.tld/v1".to_string(),
         }];
         assert!(matches!(

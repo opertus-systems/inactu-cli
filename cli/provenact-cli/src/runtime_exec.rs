@@ -412,12 +412,18 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             let agent: ureq::Agent = ureq::Agent::config_builder()
                 .timeout_connect(Some(Duration::from_secs(HTTP_CONNECT_TIMEOUT_SECS)))
                 .timeout_global(Some(Duration::from_secs(HTTP_TOTAL_TIMEOUT_SECS)))
+                // Capability checks are evaluated against the requested URL only.
+                // Disallow redirects to prevent cross-origin/path bypass.
+                .max_redirects(0)
                 .build()
                 .into();
             let response = match agent.get(&url).call() {
                 Ok(v) => v,
                 Err(_) => return Ok(-1),
             };
+            if response.status().is_redirection() {
+                return Ok(-1);
+            }
             let mut body = Vec::new();
             let max = out_len as usize;
             let mut reader = response.into_body().into_reader().take(max as u64);
@@ -452,7 +458,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 &mut caller,
                 "kv.write",
                 |value| value == "*" || value == key,
-                "kv.put",
+                "kv.write",
             )?;
             let Some(value) = read_from_memory(&mut caller, val_ptr as usize, val_len as usize)
             else {
@@ -499,7 +505,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 &mut caller,
                 "kv.read",
                 |value| value == "*" || value == key,
-                "kv.get",
+                "kv.read",
             )?;
             let path = kv_file_path(&key_bytes);
             let _guard = match acquire_path_lock(&path) {
