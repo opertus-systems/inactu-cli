@@ -973,6 +973,9 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
         "time.now" => !capability.value.is_empty() && ceiling.time.unwrap_or(false),
         "random.bytes" => !capability.value.is_empty() && ceiling.random.unwrap_or(false),
         "kv.read" => {
+            if capability.value.is_empty() {
+                return false;
+            }
             let Some(kv) = &ceiling.kv else {
                 return false;
             };
@@ -984,6 +987,9 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
                 .any(|item| item == "*" || item == &capability.value)
         }
         "kv.write" => {
+            if capability.value.is_empty() {
+                return false;
+            }
             let Some(kv) = &ceiling.kv else {
                 return false;
             };
@@ -995,6 +1001,9 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
                 .any(|item| item == "*" || item == &capability.value)
         }
         "queue.publish" => {
+            if capability.value.is_empty() {
+                return false;
+            }
             let Some(queue) = &ceiling.queue else {
                 return false;
             };
@@ -1006,6 +1015,9 @@ fn is_capability_allowed(capability: &Capability, ceiling: &CapabilityCeiling) -
                 .any(|item| item == "*" || item == &capability.value)
         }
         "queue.consume" => {
+            if capability.value.is_empty() {
+                return false;
+            }
             let Some(queue) = &ceiling.queue else {
                 return false;
             };
@@ -1171,6 +1183,11 @@ fn validate_policy_constraints(policy: &Policy) -> Result<(), VerifyError> {
     }
     if let Some(kv) = &ceiling.kv {
         if let Some(read) = &kv.read {
+            if read.iter().any(String::is_empty) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.kv.read items must be non-empty".to_string(),
+                ));
+            }
             if has_duplicates(read) {
                 return Err(VerifyError::PolicyConstraint(
                     "capability_ceiling.kv.read items must be unique".to_string(),
@@ -1178,6 +1195,11 @@ fn validate_policy_constraints(policy: &Policy) -> Result<(), VerifyError> {
             }
         }
         if let Some(write) = &kv.write {
+            if write.iter().any(String::is_empty) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.kv.write items must be non-empty".to_string(),
+                ));
+            }
             if has_duplicates(write) {
                 return Err(VerifyError::PolicyConstraint(
                     "capability_ceiling.kv.write items must be unique".to_string(),
@@ -1187,6 +1209,11 @@ fn validate_policy_constraints(policy: &Policy) -> Result<(), VerifyError> {
     }
     if let Some(queue) = &ceiling.queue {
         if let Some(publish) = &queue.publish {
+            if publish.iter().any(String::is_empty) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.queue.publish items must be non-empty".to_string(),
+                ));
+            }
             if has_duplicates(publish) {
                 return Err(VerifyError::PolicyConstraint(
                     "capability_ceiling.queue.publish items must be unique".to_string(),
@@ -1194,6 +1221,11 @@ fn validate_policy_constraints(policy: &Policy) -> Result<(), VerifyError> {
             }
         }
         if let Some(consume) = &queue.consume {
+            if consume.iter().any(String::is_empty) {
+                return Err(VerifyError::PolicyConstraint(
+                    "capability_ceiling.queue.consume items must be non-empty".to_string(),
+                ));
+            }
             if has_duplicates(consume) {
                 return Err(VerifyError::PolicyConstraint(
                     "capability_ceiling.queue.consume items must be unique".to_string(),
@@ -1753,6 +1785,68 @@ capability_ceiling:
         assert!(matches!(
             enforce_capability_ceiling(&requested, &policy),
             Err(VerifyError::CapabilityDenied(_))
+        ));
+    }
+
+    #[test]
+    fn denies_empty_kv_and_queue_capability_values_even_with_wildcards() {
+        let policy = Policy {
+            version: 1,
+            trusted_signers: vec!["alice.dev".to_string()],
+            capability_ceiling: CapabilityCeiling {
+                fs: None,
+                net: None,
+                kv: Some(PolicyKv {
+                    read: Some(vec!["*".to_string()]),
+                    write: Some(vec!["*".to_string()]),
+                }),
+                queue: Some(PolicyQueue {
+                    publish: Some(vec!["*".to_string()]),
+                    consume: Some(vec!["*".to_string()]),
+                }),
+                env: None,
+                exec: Some(false),
+                time: Some(false),
+                random: Some(false),
+            },
+        };
+        let requested = vec![
+            Capability {
+                kind: "kv.read".to_string(),
+                value: String::new(),
+            },
+            Capability {
+                kind: "kv.write".to_string(),
+                value: String::new(),
+            },
+            Capability {
+                kind: "queue.publish".to_string(),
+                value: String::new(),
+            },
+            Capability {
+                kind: "queue.consume".to_string(),
+                value: String::new(),
+            },
+        ];
+        assert!(matches!(
+            enforce_capability_ceiling(&requested, &policy),
+            Err(VerifyError::CapabilityDenied(_))
+        ));
+    }
+
+    #[test]
+    fn denies_policy_with_empty_kv_or_queue_entries() {
+        let raw = br#"{
+          "version": 1,
+          "trusted_signers": ["alice.dev"],
+          "capability_ceiling": {
+            "kv": { "read": [""] },
+            "queue": { "publish": ["*"] }
+          }
+        }"#;
+        assert!(matches!(
+            parse_policy_document(raw),
+            Err(VerifyError::PolicyConstraint(_))
         ));
     }
 
