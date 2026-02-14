@@ -1,0 +1,43 @@
+{
+  "name": "capability-normalization-boundary",
+  "policy": {
+    "version": 1,
+    "trusted_signers": ["alice.dev"],
+    "capability_ceiling": {
+      "fs": {
+        "read": ["/tmp"],
+        "write": ["/tmp"]
+      },
+      "net": ["https://api.example.test/v1"],
+      "exec": false,
+      "time": false
+    }
+  },
+  "cases": [
+    {
+      "capability": {"kind": "fs.read", "value": "/tmp/allowed.txt"},
+      "expect": "allow",
+      "note": "regular path under prefix remains allowed"
+    },
+    {
+      "capability": {"kind": "fs.read", "value": "/tmp/./allowed.txt"},
+      "expect": "deny",
+      "note": "dot-segment paths are rejected to avoid ambiguity"
+    },
+    {
+      "capability": {"kind": "net.http", "value": "https://api.example.test:443/v1/forecast"},
+      "expect": "allow",
+      "note": "explicit default https port matches policy URI without explicit port"
+    },
+    {
+      "capability": {"kind": "net.http", "value": "https://api.example.test:444/v1/forecast"},
+      "expect": "deny",
+      "note": "non-default port must not match an implicit default-port policy URI"
+    },
+    {
+      "capability": {"kind": "net.http", "value": "data:text/plain,ok"},
+      "expect": "deny",
+      "note": "schemes without authority are denied for net capability checks"
+    }
+  ]
+}
