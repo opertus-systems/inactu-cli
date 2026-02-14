@@ -4,13 +4,16 @@ use serde_json::json;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
 use std::ffi::OsString;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 use getrandom::fill as random_fill_os;
 use provenact_verifier::{sha256_prefixed, Capability};
@@ -511,7 +514,10 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 Some(guard) => guard,
                 None => return Ok(-1),
             };
-            if fs::write(path, value).is_err() {
+            if is_symlink_path(&path) {
+                return Ok(-1);
+            }
+            if write_file_replace_symlink_safe(&path, &value).is_err() {
                 return Ok(-1);
             }
             Ok(0)
@@ -546,6 +552,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 Some(guard) => guard,
                 None => return Ok(-1),
             };
+            if is_symlink_path(&path) {
+                return Ok(-1);
+            }
             let data = match fs::read(path) {
                 Ok(v) => v,
                 Err(_) => return Ok(-1),
@@ -599,11 +608,14 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 Some(guard) => guard,
                 None => return Ok(-1),
             };
+            if is_symlink_path(&path) {
+                return Ok(-1);
+            }
             let current_size = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
             if current_size > MAX_QUEUE_FILE_BYTES {
                 return Ok(-1);
             }
-            let mut file = match OpenOptions::new().create(true).append(true).open(path) {
+            let mut file = match open_append_no_follow(&path) {
                 Ok(f) => f,
                 Err(_) => return Ok(-1),
             };
@@ -648,6 +660,9 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
                 Some(guard) => guard,
                 None => return Ok(-1),
             };
+            if is_symlink_path(&path) {
+                return Ok(-1);
+            }
             if fs::metadata(&path).map(|m| m.len()).unwrap_or(0) > MAX_QUEUE_FILE_BYTES {
                 return Ok(-1);
             }
@@ -676,7 +691,7 @@ fn define_hostcalls(linker: &mut Linker<HostState>) -> Result<(), wasmtime::Erro
             } else {
                 format!("{}\n", lines.join("\n"))
             };
-            if fs::write(&path, rewritten.as_bytes()).is_err() {
+            if write_file_replace_symlink_safe(&path, rewritten.as_bytes()).is_err() {
                 return Ok(-1);
             }
             Ok(write_to_memory(&mut caller, out_ptr as usize, &payload).unwrap_or(-1))
@@ -969,6 +984,22 @@ fn write_file_replace_symlink_safe(path: &Path, bytes: &[u8]) -> std::io::Result
     ))
 }
 
+fn is_symlink_path(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false)
+}
+
+fn open_append_no_follow(path: &Path) -> std::io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.create(true).append(true);
+    #[cfg(unix)]
+    {
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    options.open(path)
+}
+
 fn default_runtime_root(kind: &str) -> PathBuf {
     if let Some(home) = env::var_os("PROVENACT_HOME") {
         return PathBuf::from(home).join("runtime").join(kind);
@@ -1136,6 +1167,29 @@ mod tests {
         let sink_meta = fs::symlink_metadata(&sink).expect("sink metadata");
         assert!(!sink_meta.file_type().is_symlink());
         assert_eq!(fs::read(&sink).expect("sink read"), b"new-value");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn open_append_no_follow_rejects_symlink_targets() {
+        let base = std::env::temp_dir().join(format!(
+            "provenact-open-append-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        fs::create_dir_all(&base).expect("temp dir should exist");
+
+        let target = base.join("target.log");
+        fs::write(&target, b"seed").expect("target write");
+        let sink = base.join("sink.log");
+        std::os::unix::fs::symlink(&target, &sink).expect("symlink create");
+        assert!(is_symlink_path(&sink));
+        assert!(open_append_no_follow(&sink).is_err());
 
         let _ = fs::remove_dir_all(&base);
     }
