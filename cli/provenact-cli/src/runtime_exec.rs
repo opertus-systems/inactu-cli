@@ -801,7 +801,7 @@ fn normalize_abs_path(path: &str) -> Option<String> {
         if part.is_empty() {
             continue;
         }
-        if part == "." || part == ".." {
+        if part == "." || part == ".." || part.chars().any(char::is_control) {
             return None;
         }
         normalized.push(part);
@@ -1141,6 +1141,12 @@ mod tests {
     fn normalize_uri_path_rejects_percent_encoded_bytes() {
         assert!(normalize_uri_path("/v1/%2f..%2fadmin").is_none());
         assert!(normalize_uri_path("/v1/%20file").is_none());
+    }
+
+    #[test]
+    fn normalize_abs_path_rejects_control_characters() {
+        assert!(normalize_abs_path("/tmp/hello\nworld").is_none());
+        assert!(normalize_abs_path("/tmp/\u{0000}").is_none());
     }
 
     #[cfg(unix)]
