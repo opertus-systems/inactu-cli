@@ -10,8 +10,42 @@ permissions:
   contents: read
 
 jobs:
-  conformance:
+  sync-spec-check:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout provenact-cli
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Read source commit from sync manifest
+        id: sync_manifest
+        shell: bash
+        run: |
+          source_commit="$(python3 - <<'PY'
+          import json
+          with open("sync-manifest.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+          print(data["source_repo"]["commit"])
+          PY
+          )"
+          echo "source_commit=$source_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout provenact-spec at pinned source commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: opertus-systems/provenact-spec
+          ref: ${{ steps.sync_manifest.outputs.source_commit }}
+          path: provenact-spec
+
+      - name: Run sync parity check
+        shell: bash
+        run: |
+          chmod +x ./scripts/check-sync-parity.sh
+          ./scripts/check-sync-parity.sh ./sync-manifest.json "$GITHUB_WORKSPACE/provenact-spec"
+
+  conformance-check:
+    runs-on: ubuntu-latest
+    needs:
+      - sync-spec-check
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -24,3 +58,15 @@ jobs:
 
       - name: Run Conformance Suite
         run: cargo conformance
+
+  release-contract-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Verify release contract pin metadata
+        shell: bash
+        run: |
+          chmod +x ./scripts/check-release-contract.sh
+          ./scripts/check-release-contract.sh
