@@ -8,6 +8,12 @@ Status legend:
 - `partial`: some rules enforced, but not complete against the normative file.
 - `gap`: no direct automated enforcement yet.
 
+## Mirror Source Pin
+
+- `spec/` + `test-vectors/` mirror source:
+  `opertus-systems/provenact-spec@fe677208ab9025c44884de36fe6ebf999889048b`
+  (recorded in `sync-manifest.json`).
+
 ## Matrix
 
 | Normative Source | Current Enforcement Evidence | Status | Notes |

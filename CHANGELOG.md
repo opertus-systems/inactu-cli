@@ -32,6 +32,11 @@ Versioning.
   with verifier helpers and hash-verification support.
 - CLI receipt format selection: `run --receipt-format <v0|v1-draft>`.
 - `verify-receipt` support for v1 draft receipt hash verification.
+- Source-of-truth sync enforcement artifacts:
+  - `sync-manifest.json` for mirrored `spec/` and `test-vectors/`
+  - `scripts/check-sync-parity.sh` parity gate
+  - `scripts/check-release-contract.sh` source-pin contract gate
+  - CI jobs `sync-spec-check` and `release-contract-check`
 
 ### Changed
 - `verify` and `run` now require `--keys-digest` (digest pinning is no longer
@@ -52,6 +57,12 @@ Versioning.
   reproducible build proofs are not yet a shipped v0 guarantee.
 - `spec/hashing.md` now specifies v1 draft receipt preimage and bundle-hash
   preimage rules.
+- P0-1 remediation evidence for `RUSTSEC-2026-0009`:
+  - verified no `time 0.3.36` in `Cargo.lock`
+  - lockfile no longer resolves a `time` package in this workspace
+  - `cargo audit` is clean for the advisory
+  - mirror source pin recorded as
+    `opertus-systems/provenact-spec@fe677208ab9025c44884de36fe6ebf999889048b`
 
 ## [0.1.0] - 2026-02-06
 

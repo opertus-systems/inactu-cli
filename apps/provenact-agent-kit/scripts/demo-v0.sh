@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 FIXTURE_DIR="$ROOT_DIR/apps/provenact-agent-kit/fixtures/echo-v0"
-CLI=(cargo run -q -p provenact-cli --)
+CLI=(cargo run -q -p provenact-cli --bin provenact --)
 
 WORK_DIR="${1:-$(mktemp -d)}"
 mkdir -p "$WORK_DIR"

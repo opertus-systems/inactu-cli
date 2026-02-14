@@ -1,1 +1,6 @@
 * @markthom-as
+
+# Synced mirrors from provenact-spec.
+/spec/ @opertus-systems/core
+/test-vectors/ @opertus-systems/core
+/sync-manifest.json @opertus-systems/core
